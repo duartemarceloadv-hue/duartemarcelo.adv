@@ -50,6 +50,14 @@ const SHAMPOO_OPCOES = [
   "Manipulado", "Comum (sem finalidade)", "Cetoconazol", "Tricofort",
 ];
 
+const ESTADO_CIVIL_OPCOES = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União estável"];
+const INDICACAO_OPCOES = ["Redes sociais", "Amigo/familiar", "Google", "Indicação profissional", "Outro"];
+const COMO_CONHECEU_OPCOES = ["Instagram", "TikTok", "Facebook", "Google", "Indicação", "Outro"];
+const PARENTESCO_OPCOES = ["Cônjuge", "Pai/Mãe", "Irmão(ã)", "Filho(a)", "Amigo(a)", "Outro"];
+const FREQ_TERMICA_OPCOES = ["Diariamente", "Semanalmente", "Eventualmente"];
+const FREQ_TRACAO_OPCOES = ["Diariamente", "Às vezes", "Raramente"];
+const SIM_NAO_NAOSEI_OPCOES = ["Sim", "Não", "Não sei"];
+
 export default function PreAtendimentoPage({
   params,
 }: {
@@ -59,6 +67,19 @@ export default function PreAtendimentoPage({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [secaoAberta, setSecaoAberta] = useState<string>("queixa");
+
+  // Dados Pessoais
+  const [rg, setRg] = useState("");
+  const [estadoCivil, setEstadoCivil] = useState("");
+  const [ocupacao, setOcupacao] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [indicacao, setIndicacao] = useState("");
+  const [comoConheceu, setComoConheceu] = useState("");
+  const [contatoUrgNome, setContatoUrgNome] = useState("");
+  const [contatoUrgTelefone, setContatoUrgTelefone] = useState("");
+  const [contatoUrgParentesco, setContatoUrgParentesco] = useState("");
+  const [peso, setPeso] = useState("");
+  const [altura, setAltura] = useState("");
 
   // State para todos os campos
   const [queixas, setQueixas] = useState<string[]>([]);
@@ -120,15 +141,23 @@ export default function PreAtendimentoPage({
 
   // Cuidados capilares adicionais
   const [secadorChapinha, setSecadorChapinha] = useState("");
+  const [secadorChapinhaFreq, setSecadorChapinhaFreq] = useState("");
   const [alisamentos, setAlisamentos] = useState("");
+  const [alisamentosTipoFreq, setAlisamentosTipoFreq] = useState("");
   const [penteadosTracao, setPenteadosTracao] = useState("");
+  const [penteadosTracaoFreq, setPenteadosTracaoFreq] = useState("");
+  const [dorTracao, setDorTracao] = useState("");
 
   // Saúde
   const [condicoesSaude, setCondicoesSaude] = useState<string[]>([]);
   const [queloides, setQueloides] = useState("");
   const [intestino, setIntestino] = useState("");
   const [cirurgias, setCirurgias] = useState("");
+  const [cirurgiasDetalhe, setCirurgiasDetalhe] = useState("");
   const [cirurgiaRecente, setCirurgiaRecente] = useState("");
+  const [cirurgiaRecenteDetalhe, setCirurgiaRecenteDetalhe] = useState("");
+  const [internacoesRecentes, setInternacoesRecentes] = useState("");
+  const [internacoesDetalhe, setInternacoesDetalhe] = useState("");
 
   // Medicamentos e Alergias
   const [medicamentos, setMedicamentos] = useState<string[]>([]);
@@ -156,6 +185,11 @@ export default function PreAtendimentoPage({
   const [cicloMenstrual, setCicloMenstrual] = useState("");
   const [fluxoMenstrual, setFluxoMenstrual] = useState("");
   const [anticoncepcional, setAnticoncepcional] = useState("");
+  const [dataUltimaMenstruacao, setDataUltimaMenstruacao] = useState("");
+  const [numFilhos, setNumFilhos] = useState("");
+  const [dataUltimoParto, setDataUltimoParto] = useState("");
+  const [desregulacaoHormonal, setDesregulacaoHormonal] = useState("");
+  const [sop, setSop] = useState("");
 
   // LGPD
   const [lgpd, setLgpd] = useState(false);
@@ -182,8 +216,23 @@ export default function PreAtendimentoPage({
     const finalQueixas = [...queixas];
     if (queixaOutro) finalQueixas.push(queixaOutro);
 
+    const pesoNum = peso ? parseFloat(peso) : null;
+    const alturaNum = altura ? parseFloat(altura) : null;
+    const imcCalc = pesoNum && alturaNum && alturaNum > 0
+      ? pesoNum / ((alturaNum / 100) * (alturaNum / 100))
+      : null;
+
     const payload = {
       pacienteId: parseInt(id),
+      dadosPessoais: {
+        rg, estadoCivil, ocupacao, endereco, indicacao, comoConheceu,
+        contatoUrgencia: {
+          nome: contatoUrgNome,
+          telefone: contatoUrgTelefone,
+          parentesco: contatoUrgParentesco,
+        },
+        peso: pesoNum, altura: alturaNum, imc: imcCalc ? parseFloat(imcCalc.toFixed(1)) : null,
+      },
       queixas: finalQueixas,
       tempoQueixa,
       quedaVolume: {
@@ -201,9 +250,18 @@ export default function PreAtendimentoPage({
         shampoo, frequencia: freqLavagem, temperatura: tempAgua, secagem,
         tempoAgua, boné: bone, tinta, arrancaCabelo,
       },
-      cuidadosCapilares: { secadorChapinha, alisamentos, penteadosTracao },
+      cuidadosCapilares: {
+        secadorChapinha, secadorChapinhaFreq,
+        alisamentos, alisamentosTipoFreq,
+        penteadosTracao, penteadosTracaoFreq, dorTracao,
+      },
       condicoesSaude,
-      infoSaudeExtra: { queloides, intestino, cirurgias, cirurgiaRecente },
+      infoSaudeExtra: {
+        queloides, intestino,
+        cirurgias, cirurgiasDetalhe,
+        cirurgiaRecente, cirurgiaRecenteDetalhe,
+        internacoesRecentes, internacoesDetalhe,
+      },
       medicamentos,
       alergias,
       habitos: {
@@ -213,6 +271,8 @@ export default function PreAtendimentoPage({
       },
       reprodutivo: {
         planejaFilhos, gestante, cicloMenstrual, fluxoMenstrual, anticoncepcional,
+        dataUltimaMenstruacao, numFilhos, dataUltimoParto,
+        desregulacaoHormonal, sop,
       },
       lgpdConsent: lgpd,
     };
@@ -339,6 +399,129 @@ export default function PreAtendimentoPage({
           <p className="text-sm text-gray-500">Preenchido pelo paciente</p>
         </div>
       </div>
+
+      {/* DADOS PESSOAIS */}
+      <Secao id="dadosPessoais" titulo="Dados Pessoais">
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">RG:</p>
+          <input
+            placeholder="Número do RG"
+            value={rg}
+            onChange={(e) => setRg(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Estado civil:</p>
+          <ChipGroup
+            opcoes={ESTADO_CIVIL_OPCOES}
+            selecionados={estadoCivil}
+            onChange={(v) => selectSingle(setEstadoCivil, v, estadoCivil)}
+            multi={false}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">Ocupação/profissão:</p>
+          <input
+            placeholder="Sua ocupação ou profissão"
+            value={ocupacao}
+            onChange={(e) => setOcupacao(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">Endereço completo:</p>
+          <input
+            placeholder="Rua, nº, bairro, cidade, estado, CEP"
+            value={endereco}
+            onChange={(e) => setEndereco(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Indicação:</p>
+          <ChipGroup
+            opcoes={INDICACAO_OPCOES}
+            selecionados={indicacao}
+            onChange={(v) => selectSingle(setIndicacao, v, indicacao)}
+            multi={false}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Como conheceu DR HAIR:</p>
+          <ChipGroup
+            opcoes={COMO_CONHECEU_OPCOES}
+            selecionados={comoConheceu}
+            onChange={(v) => selectSingle(setComoConheceu, v, comoConheceu)}
+            multi={false}
+          />
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-gray-700">Contato de urgência:</p>
+          <input
+            placeholder="Nome"
+            value={contatoUrgNome}
+            onChange={(e) => setContatoUrgNome(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+          />
+          <input
+            placeholder="Telefone"
+            value={contatoUrgTelefone}
+            onChange={(e) => setContatoUrgTelefone(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+          />
+          <p className="text-sm font-medium text-gray-700 mt-1">Parentesco:</p>
+          <ChipGroup
+            opcoes={PARENTESCO_OPCOES}
+            selecionados={contatoUrgParentesco}
+            onChange={(v) => selectSingle(setContatoUrgParentesco, v, contatoUrgParentesco)}
+            multi={false}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">Peso (kg):</p>
+            <input
+              type="number"
+              placeholder="Ex: 75"
+              value={peso}
+              onChange={(e) => setPeso(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">Altura (cm):</p>
+            <input
+              type="number"
+              placeholder="Ex: 175"
+              value={altura}
+              onChange={(e) => setAltura(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+            />
+          </div>
+        </div>
+        {peso && altura && parseFloat(altura) > 0 && (() => {
+          const pesoNum = parseFloat(peso);
+          const alturaM = parseFloat(altura) / 100;
+          const imc = pesoNum / (alturaM * alturaM);
+          let classificacao = "";
+          let cor = "";
+          if (imc < 18.5) { classificacao = "Abaixo do peso"; cor = "text-amber-600"; }
+          else if (imc <= 24.9) { classificacao = "Normal"; cor = "text-green-600"; }
+          else if (imc <= 29.9) { classificacao = "Sobrepeso"; cor = "text-amber-600"; }
+          else { classificacao = "Obesidade"; cor = "text-red-600"; }
+          return (
+            <div className="bg-gray-50 border border-gray-200 p-3 rounded-lg">
+              <p className="text-sm text-gray-700">
+                <span className="font-medium">IMC:</span>{" "}
+                <span className={`font-bold ${cor}`}>{imc.toFixed(1)}</span>{" "}
+                <span className={`text-sm ${cor}`}>({classificacao})</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Fórmula: peso / (altura em m)² = {pesoNum} / ({alturaM.toFixed(2)} × {alturaM.toFixed(2)})</p>
+            </div>
+          );
+        })()}
+      </Secao>
 
       {/* QUEIXA PRINCIPAL */}
       <Secao id="queixa" titulo="Queixa Principal">
@@ -565,8 +748,43 @@ export default function PreAtendimentoPage({
       {/* CUIDADOS CAPILARES */}
       <Secao id="cuidados" titulo="Cuidados Capilares Adicionais">
         <PerguntaSimNao pergunta="Secador/chapinha/modelador?" valor={secadorChapinha} onChange={setSecadorChapinha} />
+        {secadorChapinha === "Sim" && (
+          <div className="ml-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Frequência de uso:</p>
+            <ChipGroup
+              opcoes={FREQ_TERMICA_OPCOES}
+              selecionados={secadorChapinhaFreq}
+              onChange={(v) => selectSingle(setSecadorChapinhaFreq, v, secadorChapinhaFreq)}
+              multi={false}
+            />
+          </div>
+        )}
         <PerguntaSimNao pergunta="Alisamentos químicos?" valor={alisamentos} onChange={setAlisamentos} />
+        {alisamentos === "Sim" && (
+          <div className="ml-4">
+            <p className="text-sm font-medium text-gray-700 mb-1">Tipo e frequência?</p>
+            <input
+              type="text"
+              placeholder="Ex: Progressiva, a cada 3 meses"
+              value={alisamentosTipoFreq}
+              onChange={(e) => setAlisamentosTipoFreq(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+            />
+          </div>
+        )}
         <PerguntaSimNao pergunta="Penteados com tração?" valor={penteadosTracao} onChange={setPenteadosTracao} />
+        {penteadosTracao === "Sim" && (
+          <div className="ml-4 space-y-2">
+            <p className="text-sm font-medium text-gray-700 mb-2">Frequência:</p>
+            <ChipGroup
+              opcoes={FREQ_TRACAO_OPCOES}
+              selecionados={penteadosTracaoFreq}
+              onChange={(v) => selectSingle(setPenteadosTracaoFreq, v, penteadosTracaoFreq)}
+              multi={false}
+            />
+            <PerguntaSimNao pergunta="Sente dor na tração?" valor={dorTracao} onChange={setDorTracao} />
+          </div>
+        )}
       </Secao>
 
       {/* CONDIÇÕES DE SAÚDE */}
@@ -586,8 +804,30 @@ export default function PreAtendimentoPage({
             multi={false}
           />
         </div>
-        <PerguntaSimNao pergunta="Realizou cirurgias?" valor={cirurgias} onChange={setCirurgias} />
-        <PerguntaSimNao pergunta="Cirurgia recente (<6 meses)?" valor={cirurgiaRecente} onChange={setCirurgiaRecente} />
+        <PerguntaSimNao
+          pergunta="Realizou cirurgias?"
+          valor={cirurgias}
+          onChange={setCirurgias}
+          detalhePlaceholder="Quais e quando?"
+          detalhe={cirurgiasDetalhe}
+          onDetalheChange={setCirurgiasDetalhe}
+        />
+        <PerguntaSimNao
+          pergunta="Cirurgia recente (<6 meses)?"
+          valor={cirurgiaRecente}
+          onChange={setCirurgiaRecente}
+          detalhePlaceholder="Qual e há quanto tempo?"
+          detalhe={cirurgiaRecenteDetalhe}
+          onDetalheChange={setCirurgiaRecenteDetalhe}
+        />
+        <PerguntaSimNao
+          pergunta="Internações recentes?"
+          valor={internacoesRecentes}
+          onChange={setInternacoesRecentes}
+          detalhePlaceholder="Motivo e quando?"
+          detalhe={internacoesDetalhe}
+          onDetalheChange={setInternacoesDetalhe}
+        />
       </Secao>
 
       {/* MEDICAMENTOS */}
@@ -681,6 +921,54 @@ export default function PreAtendimentoPage({
             value={anticoncepcional}
             onChange={(e) => setAnticoncepcional(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">Data última menstruação: (se aplicável)</p>
+          <input
+            type="date"
+            value={dataUltimaMenstruacao}
+            onChange={(e) => setDataUltimaMenstruacao(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">Nº filhos:</p>
+            <input
+              type="number"
+              placeholder="0"
+              value={numFilhos}
+              onChange={(e) => setNumFilhos(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">Data último parto:</p>
+            <input
+              type="date"
+              value={dataUltimoParto}
+              onChange={(e) => setDataUltimoParto(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+            />
+          </div>
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Desregulação hormonal: (se aplicável)</p>
+          <ChipGroup
+            opcoes={SIM_NAO_NAOSEI_OPCOES}
+            selecionados={desregulacaoHormonal}
+            onChange={(v) => selectSingle(setDesregulacaoHormonal, v, desregulacaoHormonal)}
+            multi={false}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">SOP (Síndrome dos Ovários Policísticos): (se aplicável)</p>
+          <ChipGroup
+            opcoes={SIM_NAO_NAOSEI_OPCOES}
+            selecionados={sop}
+            onChange={(v) => selectSingle(setSop, v, sop)}
+            multi={false}
           />
         </div>
       </Secao>

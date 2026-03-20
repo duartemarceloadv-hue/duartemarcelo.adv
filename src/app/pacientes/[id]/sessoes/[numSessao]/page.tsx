@@ -64,6 +64,17 @@ const CHECKLIST_POS = [
   "Próxima sessão agendada",
 ];
 
+const CHECKLIST_MATERIAIS = [
+  "Seringa 3ml", "Seringa 5ml", "Agulha 30G", "Agulha 32G",
+  "Luvas (par)", "Gaze estéril", "Álcool 70%", "Clorexidina",
+  "Anestésico tópico", "Dermaroller", "Derma pen", "Máscara",
+  "Touca", "Jaleco",
+];
+
+const HOMECARE_MOTIVOS = ["Esquecimento", "Efeito colateral", "Não gostou", "Custo", "Outro"];
+
+const FOTOS_ANGULOS = ["Frontal", "Topo", "Lat. D", "Lat. E", "Posterior", "Topo Post.", "Close"];
+
 export default function SessaoPage({ params }: { params: Promise<{ id: string; numSessao: string }> }) {
   const { id, numSessao } = use(params);
   const router = useRouter();
@@ -86,6 +97,11 @@ export default function SessaoPage({ params }: { params: Promise<{ id: string; n
   const [dorPos, setDorPos] = useState<number | null>(null);
   const [checkOrient, setCheckOrient] = useState<boolean[]>(new Array(7).fill(false));
   const [checkPos, setCheckPos] = useState<boolean[]>(new Array(3).fill(false));
+  const [checkMateriais, setCheckMateriais] = useState<boolean[]>(new Array(14).fill(false));
+  const [homeCareMotivo, setHomeCareMotivo] = useState("");
+  const [extras5, setExtras5] = useState<Record<number, {resposta: string; obs: string}>>({});
+  const [microscopia5, setMicroscopia5] = useState("");
+  const [extrasUltima, setExtrasUltima] = useState<Record<string, string>>({});
   const [prescricao, setPrescricao] = useState("");
   const [obs, setObs] = useState("");
 
@@ -143,6 +159,10 @@ export default function SessaoPage({ params }: { params: Promise<{ id: string; n
         dorPos,
         checklistOrientacoesPo: checkOrient,
         checklistPos: checkPos,
+        checklistMateriais: checkMateriais,
+        homeCareMotivo,
+        extras5sessao: numSessaoInt === 5 ? { perguntas: extras5, microscopia: microscopia5 } : null,
+        extrasUltima: numSessaoInt === totalSessoes ? extrasUltima : null,
         prescricaoAdicional: prescricao,
         observacoes: obs,
         isUltimaSessao: numSessaoInt === totalSessoes,
@@ -182,6 +202,17 @@ export default function SessaoPage({ params }: { params: Promise<{ id: string; n
         <p className="text-xs text-gray-500">Checklist: {checkPre.filter(Boolean).length}/8 itens</p>
       </Sec>
 
+      {/* Checklist materiais */}
+      <Sec sid="materiais" titulo="Checklist Materiais (14 itens)">
+        {CHECKLIST_MATERIAIS.map((item, i) => (
+          <label key={i} className="flex items-center gap-3">
+            <input type="checkbox" checked={checkMateriais[i]} onChange={e => { const n = [...checkMateriais]; n[i] = e.target.checked; setCheckMateriais(n); }} className="h-4 w-4 text-teal-600 rounded" />
+            <span className="text-sm text-gray-700">{item}</span>
+          </label>
+        ))}
+        <p className="text-xs text-gray-500">Checklist: {checkMateriais.filter(Boolean).length}/14 itens</p>
+      </Sec>
+
       {/* Perguntas recorrentes */}
       <Sec sid="perguntas" titulo="Perguntas Recorrentes (10)">
         {PERGUNTAS.map((p) => (
@@ -197,6 +228,18 @@ export default function SessaoPage({ params }: { params: Promise<{ id: string; n
             <textarea placeholder="Observação (opcional)" value={respostas[p.id]?.obs || ""} rows={1}
               onChange={e => setRespostas({ ...respostas, [p.id]: { ...(respostas[p.id] || { resposta: "" }), obs: e.target.value } })}
               className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none" />
+            {p.id === 3 && (respostas[3]?.resposta === "Parcial" || respostas[3]?.resposta === "Não") && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Motivo:</p>
+                <div className="flex flex-wrap gap-2">
+                  {HOMECARE_MOTIVOS.map(m => (
+                    <button key={m} type="button" onClick={() => setHomeCareMotivo(homeCareMotivo === m ? "" : m)}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${homeCareMotivo === m ? "bg-teal-600 text-white border-teal-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                    >{m}</button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </Sec>
@@ -292,6 +335,99 @@ export default function SessaoPage({ params }: { params: Promise<{ id: string; n
           </label>
         ))}
       </Sec>
+
+      {/* Reavaliação 5ª Sessão */}
+      {parseInt(numSessao) === 5 && (
+        <Sec sid="reaval" titulo="Reavaliação (5ª Sessão)">
+          {[
+            { id: 1, texto: "Melhora visível na comparação fotográfica?" },
+            { id: 2, texto: "Necessidade de ajuste na mescla?" },
+            { id: 3, texto: "Pull test comparativo (melhora)?" },
+            { id: 4, texto: "Densidade comparativa (melhora)?" },
+          ].map((q) => (
+            <div key={q.id} className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">{q.id}. {q.texto}</p>
+              <div className="flex gap-2">
+                {["Sim", "Não"].map(o => (
+                  <button key={o} type="button" onClick={() => setExtras5({ ...extras5, [q.id]: { ...(extras5[q.id] || { obs: "" }), resposta: o } })}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${extras5[q.id]?.resposta === o ? "bg-teal-600 text-white border-teal-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                  >{o}</button>
+                ))}
+              </div>
+              <textarea placeholder="Observação (opcional)" value={extras5[q.id]?.obs || ""} rows={1}
+                onChange={e => setExtras5({ ...extras5, [q.id]: { ...(extras5[q.id] || { resposta: "" }), obs: e.target.value } })}
+                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none" />
+            </div>
+          ))}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">Microscopia obrigatória</p>
+            <textarea placeholder="Achados da microscopia" value={microscopia5} onChange={e => setMicroscopia5(e.target.value)} rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">Fotos comparativas (7 ângulos)</p>
+            <div className="flex flex-wrap gap-2">
+              {FOTOS_ANGULOS.map(a => (
+                <button key={a} type="button" className="px-3 py-1.5 rounded-full text-sm border bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 transition-colors">{a}</button>
+              ))}
+            </div>
+          </div>
+        </Sec>
+      )}
+
+      {/* Avaliação Final (Última Sessão) */}
+      {parseInt(numSessao) === totalSessoes && (
+        <Sec sid="final" titulo="Avaliação Final (Última Sessão)">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">1. Resultado geral do tratamento?</p>
+            <div className="flex flex-wrap gap-2">
+              {["Excelente", "Bom", "Moderado", "Insuficiente"].map(o => (
+                <button key={o} type="button" onClick={() => setExtrasUltima({ ...extrasUltima, resultado: o })}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${extrasUltima.resultado === o ? "bg-teal-600 text-white border-teal-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                >{o}</button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">2. Melhora visível na comparação fotográfica final?</p>
+            <div className="flex flex-wrap gap-2">
+              {["Sim", "Não", "Parcial"].map(o => (
+                <button key={o} type="button" onClick={() => setExtrasUltima({ ...extrasUltima, melhoraFoto: o })}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${extrasUltima.melhoraFoto === o ? "bg-teal-600 text-white border-teal-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                >{o}</button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">3. Orientações pós-tratamento entregues?</p>
+            <div className="flex gap-2">
+              {["Sim", "Não"].map(o => (
+                <button key={o} type="button" onClick={() => setExtrasUltima({ ...extrasUltima, orientacoes: o })}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${extrasUltima.orientacoes === o ? "bg-teal-600 text-white border-teal-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                >{o}</button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">4. Interesse em manutenção?</p>
+            <div className="flex gap-2">
+              {["Sim", "Não", "Talvez"].map(o => (
+                <button key={o} type="button" onClick={() => setExtrasUltima({ ...extrasUltima, manutencao: o })}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${extrasUltima.manutencao === o ? "bg-teal-600 text-white border-teal-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                >{o}</button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">Fotos finais (7 ângulos)</p>
+            <div className="flex flex-wrap gap-2">
+              {FOTOS_ANGULOS.map(a => (
+                <button key={a} type="button" className="px-3 py-1.5 rounded-full text-sm border bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 transition-colors">{a}</button>
+              ))}
+            </div>
+          </div>
+        </Sec>
+      )}
 
       {/* Extras */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
