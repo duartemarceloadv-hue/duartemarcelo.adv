@@ -1,0 +1,452 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// === USUARIO DO SISTEMA ===
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  email     String   @unique
+  senha     String
+  cargo     String   // admin, medico, biomedica, consultora, recepcionista
+  crmCrbm   String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consultasVenda ConsultaVenda[]
+  sessoes        Sessao[]
+}
+
+// === PACIENTE ===
+model Paciente {
+  id              Int      @id @default(autoincrement())
+  nome            String
+  rg              String?
+  cpf             String   @unique
+  dataNascimento  DateTime
+  celular         String
+  email           String?
+  sexo            String   // Masculino, Feminino
+  estadoCivil     String?
+  ocupacao        String?
+  endereco        String?
+  indicacao       String?
+  comoConheceu    String?
+  contatoUrgNome  String?
+  contatoUrgTel   String?
+  contatoUrgParentesco String?
+  peso            Float?
+  altura          Float?
+  imc             Float?
+  lgpdConsent     Boolean  @default(false)
+  statusFluxo     String   @default("cadastrado")
+  // cadastrado, pre_atendimento, consultora, contrato, biomedica, em_tratamento, manutencao, alta
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  preAtendimentos   PreAtendimento[]
+  consultasVenda    ConsultaVenda[]
+  contratos         Contrato[]
+  anamnesesBiomedica AnamneseBiomedica[]
+  registrosFoto     RegistroFoto[]
+  consentimentoFoto ConsentimentoFoto[]
+  planosTerap       PlanoTerapeutico[]
+  tcles             TCLE[]
+  sessoes           Sessao[]
+  examesLab         ExameLaboratorial[]
+  manutencoes       Manutencao[]
+  altas             Alta[]
+  historicoFluxo    HistoricoFluxo[]
+}
+
+// === M1: PRE-ATENDIMENTO ===
+model PreAtendimento {
+  id              Int      @id @default(autoincrement())
+  pacienteId      Int
+  // Queixa principal
+  queixas         String   // JSON array de chips selecionados
+  tempoQueixa     String?
+  // Queda e volume (cada pergunta individual)
+  quedaVolume     String   // JSON com respostas + textos automáticos
+  // Afinamento
+  afinamento      String?  // JSON
+  // Sinais e sintomas
+  sinaisSintomas  String   // JSON (coceira, dor, ardência, etc.)
+  // Oleosidade
+  oleosidade      String?
+  // Condições do couro
+  condicoesCouro  String   // JSON array
+  // Tratamentos anteriores
+  tratAnteriores  String   // JSON
+  // Histórico familiar
+  histFamiliar    String   // JSON
+  // Expectativas
+  expectativas    String   // JSON
+  // Higiene capilar
+  higiene         String   // JSON
+  // Cuidados capilares adicionais
+  cuidadosCapilares String? // JSON
+  // Condições de saúde
+  condicoesSaude  String   // JSON array
+  infoSaudeExtra  String?  // JSON (queloides, intestino, cirurgias)
+  // Medicamentos
+  medicamentos    String   // JSON array
+  // Alergias
+  alergias        String   // JSON array
+  // Hábitos
+  habitos         String   // JSON
+  // Reprodutivo
+  reprodutivo     String   // JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+  briefing Briefing?
+}
+
+// === BRIEFING AUTOMÁTICO (6 blocos) ===
+model Briefing {
+  id                Int      @id @default(autoincrement())
+  preAtendimentoId  Int      @unique
+  resumo            String   // JSON - Bloco 1
+  perfilCompleto    String   // JSON - Bloco 2
+  gatilhos          String   // JSON - Bloco 3 (19 gatilhos ativados)
+  objecoes          String   // JSON - Bloco 4 (objeções prováveis)
+  substancias       String   // JSON - Bloco 5
+  roteiro           String   // JSON - Bloco 6
+  trilhaProvavel    String
+  createdAt         DateTime @default(now())
+
+  preAtendimento PreAtendimento @relation(fields: [preAtendimentoId], references: [id])
+  consultaVenda  ConsultaVenda?
+}
+
+// === TRICOSCOPIA (IA) ===
+model Tricoscopia {
+  id              Int      @id @default(autoincrement())
+  consultaVendaId Int      @unique
+  fotoUrl         String?
+  iaAnalise       String   // JSON com 11 campos da IA
+  edicoes         String?  // JSON com edições da consultora
+  classificacaoHN String?  // Hamilton-Norwood
+  classificacaoOlsen String? // Olsen (feminino)
+  diagnosticoProvavel String?
+  textoAnalise    String?  // Texto gerado pela IA
+  dicaVenda       String?  // Dica de venda gerada pela IA
+  createdAt       DateTime @default(now())
+
+  consultaVenda ConsultaVenda @relation(fields: [consultaVendaId], references: [id])
+}
+
+// === M2: CONSULTA VENDA (CONSULTORA) ===
+model ConsultaVenda {
+  id              Int      @id @default(autoincrement())
+  pacienteId      Int
+  consultorId     Int
+  briefingId      Int      @unique
+  identidadeConfirmada Boolean @default(false)
+  // Checklist 8 passos
+  checklist8passos String  // JSON
+  // Avaliação
+  avaliacaoRegeneracao String? // Regeneração possível, Só manutenção, Parcial
+  pacote          String?
+  valor           Float?
+  numSessoes      Int?
+  // Objeções
+  objecoes        String?  // JSON array
+  // Decisão
+  decisao         String?  // Comprou, Vai pensar, Não fechou
+  motivoNaoFechou String?
+  followupData    DateTime?
+  observacoes     String?
+  laudoGerado     String?  // JSON - laudo completo gerado
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  paciente    Paciente    @relation(fields: [pacienteId], references: [id])
+  consultor   Usuario     @relation(fields: [consultorId], references: [id])
+  briefing    Briefing    @relation(fields: [briefingId], references: [id])
+  tricoscopia Tricoscopia?
+  contratos   Contrato[]
+}
+
+// === M3: CONTRATO ===
+model Contrato {
+  id              Int      @id @default(autoincrement())
+  pacienteId      Int
+  consultaVendaId Int?
+  tipo            String   // Protocolo Terapêutico Capilar, Protocolo de Manutenção
+  numContrato     String?
+  pacote          String?
+  valor           Float
+  desconto        Float    @default(0)
+  valorFinal      Float
+  numSessoes      Int
+  prazoMaxMeses   Int?
+  formaPagamento  String   // PIX, Dinheiro, Cartão crédito, etc.
+  parcelas        Int      @default(1)
+  valorParcela    Float?
+  kitHomeCare     String?  // JSON (tipo, entrega)
+  status          String   @default("ativo") // ativo, concluido, cancelado
+  assinado        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  paciente      Paciente       @relation(fields: [pacienteId], references: [id])
+  consultaVenda ConsultaVenda? @relation(fields: [consultaVendaId], references: [id])
+  pagamentos    Pagamento[]
+  sessoes       Sessao[]
+  manutencao    Manutencao?
+}
+
+// === PAGAMENTO ===
+model Pagamento {
+  id          Int       @id @default(autoincrement())
+  contratoId  Int
+  parcela     Int
+  valor       Float
+  dataVenc    DateTime
+  dataPago    DateTime?
+  status      String    @default("pendente") // pendente, pago, atrasado
+  formaPgto   String?
+  createdAt   DateTime  @default(now())
+
+  contrato Contrato @relation(fields: [contratoId], references: [id])
+}
+
+// === M4: ANAMNESE BIOMÉDICA ===
+model AnamneseBiomedica {
+  id                    Int      @id @default(autoincrement())
+  pacienteId            Int
+  identidadeConfirmada  Boolean  @default(false)
+  // Dados confirmados do M1
+  queixasConfirmadas    String?  // JSON
+  saudeConfirmada       String?  // JSON
+  alergiasConfirmadas   String?  // JSON
+  medsConfirmados       String?  // JSON
+  // Anamnese aprofundada
+  tempoQuedaDetalhado   String?
+  evolucao              String?  // Piorando, Estável, Melhorando
+  doencasPele           String?
+  cirurgiasAnteriores   String?
+  internacoes           String?
+  medsEspecificos       String?  // JSON (anticoag, isotret, antidep, cortic)
+  sono                  String?  // Bom, Regular, Ruim
+  alimentacao           String?  // Equilibrada, Restritiva, Irregular
+  atividadeFisica       String?  // Sim, Não, Às vezes
+  aguaDia               String?  // <1L, 1-2L, >2L
+  // Exame clínico
+  classificacaoHN       String?  // Hamilton-Norwood expandido
+  classificacaoLudwig   String?  // Ludwig
+  classificacaoOlsen    String?  // Olsen
+  classificacaoFitzpatrick String? // Fitzpatrick
+  pullTest              String?  // Positivo, Negativo
+  pullTestTexto         String?
+  cardTest              String?
+  tugTest               String?
+  washTest              String?
+  // Tricoscopia detalhada
+  tricoMiniaturizacao   String?  // JSON (sim/não + regiões)
+  tricoAnomalias        String?
+  tricoOstios           String?  // JSON chips
+  tricoEpiderme         String?  // JSON chips
+  tricoAreasAfetadas    String?  // JSON chips
+  // Análise capilar
+  densidade             String?
+  elasticidade          String?
+  textura               String?
+  porosidade            String?
+  curvatura             String?
+  diametro              String?
+  tipoClassificacao     String?  // 1A-4C
+  corNatural            String?
+  // Escala de dor
+  escalaDorPre          Int?     // 0-10
+  toleranciaDor         String?  // Alta, Média, Baixa
+  // Contraindicações verificadas
+  contraindicacoes      String?  // JSON toggles
+  observacoes           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === REGISTRO FOTOGRÁFICO ===
+model RegistroFoto {
+  id            Int      @id @default(autoincrement())
+  pacienteId    Int
+  moduloOrigem  String   // M4, M5-5, M5-ultima, M7
+  angulo        String   // Frontal, Topo, Lateral D, Lateral E, Posterior, Topo Posterior, Close
+  fotoUrl       String
+  conforme      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === CONSENTIMENTO FOTOGRÁFICO ===
+model ConsentimentoFoto {
+  id              Int      @id @default(autoincrement())
+  pacienteId      Int
+  prontuario      Boolean  @default(true)  // Obrigatório
+  cientifico      Boolean  @default(false)
+  educacional     Boolean  @default(false)
+  comercialAnon   Boolean  @default(false)
+  comercialSemAnon Boolean @default(false)
+  naoAutoriza     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === PLANO TERAPÊUTICO ===
+model PlanoTerapeutico {
+  id                     Int      @id @default(autoincrement())
+  pacienteId             Int
+  diagnosticoPrincipal   String
+  diagnosticosSecundarios String?
+  trilha                 String   // AGA Masculina, AGA Feminina, Eflúvio, Seborreica, Personalizado
+  mescla                 String   // JSON - substâncias selecionadas
+  numSessoes             Int
+  frequencia             String   // Semanal, Quinzenal, Mensal
+  intervalo              String   // 12-19 dias ou 30-45 dias
+  cronograma             String?
+  expectativas           String?
+  assinado               Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === TCLE ===
+model TCLE {
+  id                Int      @id @default(autoincrement())
+  pacienteId        Int
+  informadoProcedimento Boolean @default(false)
+  informadoEfeitos  Boolean  @default(false)
+  informadoContraind Boolean @default(false)
+  declarouAlergias  Boolean  @default(false)
+  autorizouFotos    Boolean  @default(false)
+  recebeuHomeCare   Boolean  @default(false)
+  assinado          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === M5: SESSÃO ===
+model Sessao {
+  id                   Int      @id @default(autoincrement())
+  pacienteId           Int
+  biomedId             Int
+  contratoId           Int
+  numSessao            Int
+  totalSessoes         Int
+  // Identificação
+  identidadeConfirmada Boolean  @default(false)
+  // Checklist pré-procedimento (8 itens)
+  checklistPre         String   // JSON
+  // 10 perguntas recorrentes
+  perguntasRecorrentes String   // JSON (respostas + textos automáticos)
+  // Checklist mescla (6 ampolas)
+  checklistMescla      String   // JSON (substância, marcado, lote, validade)
+  volumeTotal          Float?
+  // Checklist materiais
+  checklistMateriais   String?  // JSON
+  // LEDterapia
+  checklistLED         String?  // JSON
+  tempoLED             Int?     // minutos
+  doseLED              Float?   // J/cm²
+  intercorrenciasLED   String?
+  // Dor pós
+  dorPos               Int?     // 0-10
+  // Orientações pós
+  checklistOrientacoesPo String? // JSON
+  // Checklist pós (3 itens)
+  checklistPos         String?  // JSON
+  // Extras
+  prescricaoAdicional  String?
+  observacoes          String?
+  // 5ª sessão extras
+  isSessao5            Boolean  @default(false)
+  extras5sessao        String?  // JSON (comparação, ajuste, pull test, densidade)
+  // Última sessão extras
+  isUltimaSessao       Boolean  @default(false)
+  extrasUltima         String?  // JSON (resultado, orientações, interesse manutenção)
+  // Prontuário gerado
+  prontuarioTexto      String?  // Texto completo gerado
+  assinado             Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+  biomed   Usuario  @relation(fields: [biomedId], references: [id])
+  contrato Contrato @relation(fields: [contratoId], references: [id])
+}
+
+// === EXAME LABORATORIAL ===
+model ExameLaboratorial {
+  id          Int      @id @default(autoincrement())
+  pacienteId  Int
+  dataExames  DateTime?
+  hemograma   String?  // JSON
+  bioquimica  String?  // JSON
+  hormonios   String?  // JSON
+  vitaminas   String?  // JSON
+  observacoes String?
+  createdAt   DateTime @default(now())
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === M6: MANUTENÇÃO ===
+model Manutencao {
+  id              Int      @id @default(autoincrement())
+  pacienteId      Int
+  novoContratoId  Int      @unique
+  regressao       String?  // JSON
+  homeCareEntre   String?  // JSON
+  mudancaSaude    String?  // JSON
+  expectativa     String?
+  reavaliacao     String?  // JSON (tricoscopia + notas)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  paciente     Paciente @relation(fields: [pacienteId], references: [id])
+  novoContrato Contrato @relation(fields: [novoContratoId], references: [id])
+}
+
+// === M7: ALTA ===
+model Alta {
+  id                Int      @id @default(autoincrement())
+  pacienteId        Int
+  resultadoGeral    String   // Excelente, Bom, Moderado, Insuficiente
+  evolucaoClinica   String?
+  classificacaoFinal String?
+  encaminhamento    String?
+  orientacoes       String?
+  dataAlta          DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
+
+// === HISTÓRICO DE FLUXO ===
+model HistoricoFluxo {
+  id             Int      @id @default(autoincrement())
+  pacienteId     Int
+  etapaAnterior  String
+  etapaAtual     String
+  observacao     String?
+  createdAt      DateTime @default(now())
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+}
