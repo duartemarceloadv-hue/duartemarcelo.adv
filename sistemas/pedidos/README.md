@@ -29,3 +29,26 @@ conforme o documento de decisão do conselho de 26/11/2026.
 - `supabase/migrations/0001_pedidos_novo_base.sql`: cadastros, pedido, receita com saldo, parcela × pagamento,
   nota fiscal, pendências, execução dos conectores, situação calculada (`v_pedido`, `v_parcela`),
   registro de alterações imutável e isolamento total (RLS em tudo, sem acesso pela internet).
+
+## Ambiente de teste (primeira versão funcionando)
+
+| Peça | Onde |
+|---|---|
+| Telas (Início, Pedidos, Pagamentos, ficha) | `web/` — HTML/CSS/JS puros, mesmo visual do `modelo/`; publicar a pasta no site Netlify `pedidos-novo-drhair` |
+| API | função `pedidos-api` do Supabase (`supabase/functions/pedidos-api/index.ts`), exige login |
+| Acesso | `supabase/migrations/0004_acesso.sql`: os 2 administradores e o bucket privado `pedidos-novo` |
+
+**Entrar:** e-mail + senha temporária (entregue à parte, nunca no repositório) → o sistema obriga a trocar a senha →
+quem é administrador ou financeiro cadastra um aplicativo autenticador (código de 6 números) → telas.
+
+**Quem vê o quê:** `admin`, `central`, `financeiro`, `leitura` veem todas as unidades (ou só as de `usuario.unidades`, se preenchido);
+`unidade` e `socio` veem só as unidades listadas em `usuario.unidades`. `leitura` não grava.
+
+**O que grava nesta versão** (tudo passa pelo registro de alterações, com o e-mail de quem fez):
+- *Confirmar recebimento* (na ficha): data não pode ser futura nem antes do envio; não vale para cancelado/rascunho.
+- *Anexar comprovante* (na ficha ou marcando parcelas em Pagamentos): PDF/JPG/PNG/XML até 10 MB, uma unidade por comprovante,
+  não deixa pagar mais do que falta, avisa se o mesmo arquivo já foi enviado.
+- *Gerar cobrança de baixa*: só monta o texto para copiar e mandar ao laboratório; não envia nada.
+
+Ações da API (POST com `acao`): `sessao`, `trocar_senha`, `inicio`, `pedidos`, `pedido`, `pagamentos`,
+`confirmar_recebimento`, `anexar_comprovante`, `cobranca_baixa`, `abrir_arquivo`.

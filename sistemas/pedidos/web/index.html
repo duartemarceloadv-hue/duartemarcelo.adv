@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Pedidos Dr. Hair</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-row">
+    <h1 class="marca"><span class="logo" aria-hidden="true">DH</span>Pedidos Dr. Hair</h1>
+    <span class="espaco"></span>
+    <span class="usuario" id="usuario" hidden></span>
+    <button class="tema" id="tema" type="button" aria-label="Trocar tema">Tema: automático</button>
+  </div>
+  <div class="wrap">
+    <nav class="abas" id="abas" aria-label="Telas" hidden>
+      <button class="aba" data-ir="inicio" type="button">Início</button>
+      <button class="aba" data-ir="pedidos" type="button">Pedidos</button>
+      <button class="aba" data-ir="pagamentos" type="button">Pagamentos</button>
+      <button class="aba breve" id="novo" type="button" aria-disabled="true">+ Novo pedido <small>em breve</small></button>
+    </nav>
+  </div>
+  <div class="faixa"><div class="wrap"><b>Ambiente de teste</b> — o sistema oficial continua sendo o atual.</div></div>
+</header>
+
+<main class="wrap" id="tela"><p class="vazio">Carregando…</p></main>
+
+<div class="veu" id="veu"></div>
+<aside class="ficha" id="ficha" aria-hidden="true" aria-label="Ficha do pedido"></aside>
+<div class="dlg-veu" id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-titulo"></div>
+<div class="aviso" id="aviso" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
