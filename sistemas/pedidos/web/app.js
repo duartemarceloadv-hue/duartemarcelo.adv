@@ -28,9 +28,9 @@ var SIT_P={E:['Enviado ao laboratório, aguardando produção','t-blue'],L:['Con
 var SIT_PC={
   V:['Vencida e sem pagamento','t-red','Pagar — vencidas de verdade','Pagar esta parcela','--red'],
   A:['A vencer','t-blue','Pagar no vencimento','Pagar esta parcela','--blue'],
-  P:['Paga por nós, falta a baixa do laboratório','t-amber','Cobrar baixa do laboratório','Cobrar baixa','--amber'],
-  B:['Baixada pelo laboratório, falta nosso comprovante','t-amber','Anexar comprovante','Anexar comprovante','--amber'],
-  Q:['Paga e baixada — tudo certo','t-green','Nada a fazer','','--green'],
+  P:['Paga por nós, falta a baixa na Omie','t-amber','Cobrar baixa na Omie','Cobrar baixa','--amber'],
+  B:['Baixa só na planilha — conferir','t-amber','Conferir pela forma de pagamento (boleto pendente?)','Conferir','--amber'],
+  Q:['Baixada na Omie — paga','t-green','Nada a fazer','','--green'],
   X:['Cancelada','t-gray','Nada a fazer','','--gray']};
 var FORMA={cartao:'Cartão',pix:'PIX',boleto:'Boleto',outro:'Outra forma'};
 function tag(t){return '<span class="tag '+t[1]+'">'+esc(t[0])+'</span>'}
@@ -57,7 +57,7 @@ async function api(acao,dados){
 
 /* ---------- estado ---------- */
 var EU=null, HOJE=hojeLocal();
-var estado={tela:'inicio',busca:'',sit:'',lab:'',acao:false,especial:'',lim:60,unid:'',grupo:'',abertos:{},sel:{}};
+var estado={tela:'inicio',busca:'',sit:'',lab:'',acao:false,especial:'',lim:60,unid:'',grupo:'',abertos:{},sel:{},pUn:'',pDe:'',pAte:'',pPag:'',pOrdem:'urgencia',gBusca:'',gLab:'',gForma:'',gDe:'',gAte:''};
 var cache={inicio:null,pedidos:null,pag:null};
 var fichaAtual=null;
 
@@ -178,9 +178,9 @@ function defCartoes(d){
   var c=d.cartoes;
   return [
    {g:'Financeiro',itens:[
-    {acao:'Anexar comprovante',det:'O laboratório já deu baixa, mas não temos o comprovante do nosso pagamento.',c:'--amber',r:c.B,ir:['pagamentos','B']},
-    {acao:'Cobrar baixa do laboratório',det:'Pagamos (com comprovante), mas o laboratório ainda não deu baixa.',c:'--amber',r:c.P,ir:['pagamentos','P']},
-    {acao:'Pagar — vencidas de verdade',det:'Venceram, não têm pagamento nosso nem baixa do laboratório.',c:'--red',r:c.V,ir:['pagamentos','V']},
+    {acao:'Conferir — baixa só na planilha',det:'A planilha do laboratório diz pago, mas a Omie ainda não baixou. Conferir pela forma de pagamento (ex.: boleto pendente).',c:'--amber',r:c.B,ir:['pagamentos','B']},
+    {acao:'Cobrar baixa na Omie',det:'Pagamos (com comprovante), mas a Omie do laboratório ainda não deu baixa.',c:'--amber',r:c.P,ir:['pagamentos','P']},
+    {acao:'Pagar — vencidas de verdade',det:'Venceram, sem baixa na Omie, sem baixa na planilha e sem comprovante nosso.',c:'--red',r:c.V,ir:['pagamentos','V']},
     {acao:'Pagar — vencem nos próximos 7 dias',det:'Vencem até '+dt(d.h7)+'.',c:'--blue',r:c.A7,ir:['pagamentos','A7']}]},
    {g:'Laboratório',itens:[
     {acao:'Cobrar laboratório — passou do prazo de 30 dias',det:'Ainda não saíram do laboratório e já passou o prazo.',c:'--red',r:c.atraso,ir:['pedidos','atraso']},
@@ -213,42 +213,65 @@ function telaInicio(d){
 
 /* ---------- Pedidos ---------- */
 function chip(grupo,val,txt,ativo){return '<button type="button" class="chip" data-f="'+grupo+'" data-v="'+val+'" aria-pressed="'+ativo+'">'+esc(txt)+'</button>'}
-function filtrosPedidos(){return {busca:estado.busca,sit:estado.sit,lab:estado.lab,so_acao:estado.acao,especial:estado.especial}}
-function telaPedidos(d){
-  var h='<h2>Pedidos</h2><p class="sub">Do mais urgente para o menos urgente. Clique num pedido para abrir a ficha completa.</p><div class="ferr">'+
-   '<input class="busca" id="busca" type="search" placeholder="Buscar por nº DH, nº do laboratório ou unidade" value="'+esc(estado.busca)+'" aria-label="Buscar pedido">';
-  if(estado.especial) h+='<div class="chips"><span class="rot">Vindo do Início</span><button type="button" class="chip fixo" data-f="esp" data-v="">'+esc(FILTRO_NOME[estado.especial])+' ✕</button></div>';
-  h+='<div class="chips"><span class="rot">Situação</span>'+chip('sit','','Todas',!estado.sit);
-  ['E','C','R','X'].forEach(function(s){h+=chip('sit',s,{E:'No laboratório',C:'A caminho',R:'Recebidos',X:'Cancelados'}[s],estado.sit===s)});
-  h+='</div><div class="chips"><span class="rot">Laboratório</span>'+chip('lab','','Todos',!estado.lab)+chip('lab','CP','Centro Paulista',estado.lab==='CP')+chip('lab','INJ','Injemed',estado.lab==='INJ')+
-     '<span style="width:8px"></span>'+chip('acao','1','Só os que precisam de ação',estado.acao)+'</div>';
-  if(!d){return h+'<div class="contagem">Carregando…</div></div><div class="lista"><div class="vazio">Carregando os pedidos…</div></div>'}
-  h+='<div class="contagem">'+plural(d.qtd,'pedido','pedidos')+' · total '+R(d.total)+'</div></div>';
-  h+='<div class="lista" role="list"><div class="cab" aria-hidden="true"><span>Nº DH</span><span>Unidade</span><span>Laboratório</span><span>Enviado em</span><span>Situação</span><span class="r">Total</span></div>';
-  if(!d.itens.length) h+='<div class="vazio">Nenhum pedido com esses filtros.</div>';
-  d.itens.forEach(function(p){
-    var a=p.acoes[0];
-    h+='<button type="button" class="linha" role="listitem" data-p="'+esc(p.id)+'">'+
-     '<span class="c-dh dh">'+esc(p.num)+'<span class="nl">lab. '+esc(p.numLab||'—')+'</span></span>'+
-     '<span class="c-un">'+esc(p.un)+'</span>'+
-     '<span class="c-lab">'+esc(p.labNome)+'</span>'+
-     '<span class="c-env"><span class="rot-m">enviado </span>'+dt(p.env)+'</span>'+
-     '<span class="c-sit">'+tag(SIT_P[p.sit]||SIT_P.E)+'</span>'+
-     '<span class="c-tot r num">'+(p.sub===0&&p.sit!=='X'?'<span style="color:var(--faint)">sem itens</span>':R(p.total))+'</span>'+
-     '<span class="faz">'+(a?'<span aria-hidden="true">→</span><b style="--c:var('+a.cor+')">'+esc(a.txt)+'</b>'+(p.acoes.length>1?' <span>+'+(p.acoes.length-1)+' '+(p.acoes.length>2?'outras':'outra')+'</span>':''):'<span style="color:var(--faint)">Nada a fazer</span>')+'</span>'+
-     '</button>';
-  });
-  h+='</div>';
-  var resta=d.qtd-d.itens.length;
-  if(resta>0) h+='<button type="button" class="mais" id="maisPed">Mostrar mais '+Math.min(60,resta)+' de '+resta+' restantes</button>';
+function filtrosPedidos(){return {busca:estado.busca,sit:estado.sit,lab:estado.lab,so_acao:estado.acao,especial:estado.especial,unidade_id:estado.pUn,de:estado.pDe,ate:estado.pAte,pag:estado.pPag,ordem:estado.pOrdem}}
+function opt(v,t,cur){return '<option value="'+esc(v)+'"'+(String(v)===String(cur||'')?' selected':'')+'>'+esc(t)+'</option>'}
+function campo(rot,html){return '<label class="campo"><span>'+esc(rot)+'</span>'+html+'</label>'}
+function filtrosAtivos(){return !!(estado.sit||estado.lab||estado.acao||estado.pUn||estado.pDe||estado.pAte||estado.pPag||estado.busca||estado.especial)}
+function resumoParc(x){
+  if(!x.n) return '<span class="fraco">sem parcelas</span>';
+  var h='<span class="num">'+x.ok+'/'+x.n+' pagas</span>';
+  if(x.venc) h+=' <span class="tag t-red mini">'+x.venc+' vencida'+(x.venc>1?'s':'')+'</span>';
+  if(x.semComp) h+=' <span class="tag t-amber mini">'+x.semComp+' sem compr.</span>';
+  if(x.falta>0) h+='<span class="sub2">falta '+R(x.falta)+(x.prox?' · vence '+dt(x.prox).slice(0,5):'')+'</span>';
   return h;
 }
+function telaPedidos(d){
+  var uns=(d&&d.unidades)||estado.pUnLista||[]; if(d&&d.unidades) estado.pUnLista=d.unidades;
+  var h='<div class="tit-linha"><h2>Pedidos</h2>'+(d?'<span class="contagem">'+plural(d.qtd,'pedido','pedidos')+' · total '+R(d.total)+'</span>':'')+'</div>';
+  if(estado.especial) h+='<div class="chips" style="margin-bottom:8px"><span class="rot">Vindo do Início</span><button type="button" class="chip fixo" data-f="esp" data-v="">'+esc(FILTRO_NOME[estado.especial])+' ✕</button></div>';
+  h+='<div class="filtros">'+
+   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">')+
+   campo('Unidade','<select class="sel" data-pf="pUn">'+opt('','Todas',estado.pUn)+uns.map(function(u){return opt(u.id,u.nome,estado.pUn)}).join('')+'</select>')+
+   campo('Laboratório','<select class="sel" data-pf="lab">'+opt('','Todos',estado.lab)+opt('CP','Centro Paulista',estado.lab)+opt('INJ','Injemed',estado.lab)+'</select>')+
+   campo('Situação','<select class="sel" data-pf="sit">'+opt('','Todas',estado.sit)+opt('E','No laboratório',estado.sit)+opt('L','Confirmado pelo lab.',estado.sit)+opt('C','A caminho',estado.sit)+opt('R','Recebidos',estado.sit)+opt('X','Cancelados',estado.sit)+'</select>')+
+   campo('Pagamento','<select class="sel" data-pf="pPag">'+opt('','Todos',estado.pPag)+opt('V','Com parcela vencida',estado.pPag)+opt('aberto','Com parcela a pagar',estado.pPag)+opt('P','Pago, falta baixa do lab.',estado.pPag)+opt('B','Baixado, falta comprovante',estado.pPag)+opt('sem','Sem parcelas',estado.pPag)+'</select>')+
+   campo('Enviado de','<input class="sel" type="date" data-pf="pDe" value="'+esc(estado.pDe||'')+'">')+
+   campo('até','<input class="sel" type="date" data-pf="pAte" value="'+esc(estado.pAte||'')+'">')+
+   campo('Ordenar por','<select class="sel" data-pf="pOrdem">'+opt('urgencia','Mais urgente primeiro',estado.pOrdem)+opt('recentes','Envio mais recente',estado.pOrdem)+opt('antigos','Envio mais antigo',estado.pOrdem)+opt('atraso','Mais dias de atraso',estado.pOrdem)+opt('valor','Maior valor',estado.pOrdem)+opt('unidade','Unidade (A–Z)',estado.pOrdem)+'</select>')+
+   '<label class="campo chk"><input type="checkbox" id="so-acao"'+(estado.acao?' checked':'')+'><span>Só os que precisam de ação</span></label>'+
+   (filtrosAtivos()?'<button type="button" class="botao sec mini" id="limpar-filtros">Limpar filtros</button>':'')+
+   '</div>';
+  if(!d) return h+'<div class="tabela"><div class="vazio">Carregando os pedidos…</div></div>';
+  h+='<div class="tabela"><table class="tp"><thead><tr><th>Nº DH / lab.</th><th>Unidade</th><th>Lab.</th><th>Enviado</th><th>Prazo</th><th>Situação</th><th class="r">Total</th><th>Parcelas</th><th>NF</th><th>Próxima ação</th></tr></thead><tbody>';
+  if(!d.itens.length) h+='<tr><td colspan="10" class="vazio">Nenhum pedido com esses filtros.</td></tr>';
+  d.itens.forEach(function(p){
+    var a=p.acoes[0], canc=p.sit==='X';
+    var prazo=p.rec?'<span class="fraco">recebido '+dt(p.rec)+'</span>':(p.atraso>0?'<b class="vermelho">'+dt(p.prazo)+'</b><span class="sub2 vermelho">+'+p.atraso+' dias</span>':(p.exp?'<span class="fraco">saiu '+dt(p.exp)+'</span>'+(p.diasCaminho?'<span class="sub2">há '+p.diasCaminho+' dias</span>':''):dt(p.prazo)));
+    h+='<tr class="lp'+(canc?' canc':'')+'" data-p="'+esc(p.id)+'" tabindex="0">'+
+     '<td><b class="dh">'+esc(p.num)+'</b><span class="sub2">'+esc(p.numLab||'—')+'</span></td>'+
+     '<td class="c-un">'+esc(p.un)+'</td>'+
+     '<td class="nw">'+esc(p.lab==='CP'?'C. Paulista':p.labNome)+'</td>'+
+     '<td class="num">'+dt(p.env)+'</td>'+
+     '<td class="num">'+(canc?'—':prazo)+'</td>'+
+     '<td class="nw">'+tag([SIT_CURTA[p.sit]||'—',(SIT_P[p.sit]||SIT_P.E)[1]])+(p.etapa&&!p.rec&&!canc?'<span class="sub2">lab.: '+esc(p.etapa.toLowerCase())+'</span>':'')+'</td>'+
+     '<td class="r num">'+(p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total))+'</td>'+
+     '<td class="nw">'+(canc?'—':resumoParc(p.parc))+'</td>'+
+     '<td class="num">'+(p.nf.length?esc(p.nf.slice(0,2).join(', '))+(p.nf.length>2?' +'+(p.nf.length-2):''):'<span class="fraco">—</span>')+'</td>'+
+     '<td class="acao">'+(a?'<b style="--c:var('+a.cor+')">'+esc(a.txt)+'</b>'+(p.acoes.length>1?' <span class="fraco">+'+(p.acoes.length-1)+'</span>':''):'<span class="fraco">nada a fazer</span>')+'</td>'+
+     '</tr>';
+  });
+  h+='</tbody></table></div>';
+  var resta=d.qtd-d.itens.length;
+  if(resta>0) h+='<button type="button" class="mais" id="maisPed">Mostrar mais '+Math.min(100,resta)+' de '+resta+' restantes</button>';
+  return h;
+}
+var SIT_CURTA={E:'No laboratório',L:'Confirmado pelo lab.',C:'A caminho',R:'Recebido',X:'Cancelado',D:'Rascunho'};
 var seqPed=0;
 async function carregarPedidos(anexar){
   var meu=++seqPed, f=filtrosPedidos();
   var ini=anexar&&cache.pedidos?cache.pedidos.itens.length:0;
   try{
-    var d=await api('pedidos',Object.assign({inicio:ini,limite:60},f));
+    var d=await api('pedidos',Object.assign({inicio:ini,limite:100},f));
     if(meu!==seqPed) return;
     if(anexar&&cache.pedidos){cache.pedidos.itens=cache.pedidos.itens.concat(d.itens);cache.pedidos.qtd=d.qtd;cache.pedidos.total=d.total}
     else cache.pedidos=d;
@@ -265,16 +288,30 @@ var GRUPOS=[
   {id:'A',f:function(x){return x.sit==='A'&&!x.prox7},nome:'A vencer (depois de 7 dias)',acao:'Nada a fazer agora — pagar no vencimento',cor:'--blue',sel:true},
   {id:'Q',f:function(x){return x.sit==='Q'}},
   {id:'X',f:function(x){return x.sit==='X'}}];
-var GRUPO_TXT={V:'Venceram e não há pagamento nosso nem baixa do laboratório.',P:'Temos o comprovante, mas o laboratório ainda não registrou o pagamento (planilha e Omie).',B:'O laboratório registrou o pagamento, mas nosso comprovante não está anexado.',A:'Vencimento mais distante.',Q:'Pagamento nosso + baixa do laboratório conferidos.',X:'Canceladas, não precisam ser pagas.'};
+var GRUPO_TXT={V:'Venceram sem baixa na Omie, sem baixa na planilha e sem comprovante nosso.',P:'Temos o comprovante, mas a Omie do laboratório ainda não deu baixa.',B:'A planilha do laboratório diz pago, mas a Omie ainda não baixou. Conferir pela forma de pagamento: boleto pode estar pendente.',A:'Vencimento mais distante.',Q:'Baixadas na Omie (o controle do laboratório). Comprovante não é obrigatório.',X:'Canceladas, não precisam ser pagas.'};
 function selecionadas(){var d=cache.pag;if(!d)return [];return d.parcelas.filter(function(x){return estado.sel[x.id]})}
 function telaPagamentos(d){
   if(!d) return '<h2>Pagamentos</h2><p class="sub">Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.</p><p class="vazio">Carregando as parcelas…</p>';
-  var base=d.parcelas.filter(function(x){return !estado.unid||x.unidade_id===estado.unid});
+  var bq=(estado.gBusca||'').trim().toLowerCase();
+  var base=d.parcelas.filter(function(x){
+    if(estado.unid&&x.unidade_id!==estado.unid) return false;
+    if(estado.gLab&&x.lab!==estado.gLab) return false;
+    if(estado.gForma&&x.forma!==estado.gForma) return false;
+    if(estado.gDe&&x.venc<estado.gDe) return false;
+    if(estado.gAte&&x.venc>estado.gAte) return false;
+    if(bq&&(x.num+' '+(x.numLab||'')+' '+x.un).toLowerCase().indexOf(bq)<0) return false;
+    return true});
   var pode=d.pode_gravar;
   var h='<h2>Pagamentos</h2><p class="sub">Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.'+(pode?' Marque as parcelas pagas com o mesmo comprovante e clique em “Anexar comprovante”.':'')+'</p>'+
-   '<div class="ferr"><label class="chips"><span class="rot">Unidade</span><select class="sel" id="unid"><option value="">Todas as unidades</option>'+
-   d.unidades.map(function(u){return '<option value="'+esc(u.id)+'"'+(u.id===estado.unid?' selected':'')+'>'+esc(u.nome)+'</option>'}).join('')+'</select></label>'+
-   '<div class="contagem">'+plural(base.length,'parcela','parcelas')+' · '+R(base.reduce(function(t,x){return t+x.valor},0))+'</div></div>';
+   '<div class="filtros">'+
+   campo('Buscar','<input class="busca" id="g-busca" type="search" placeholder="Nº DH, nº do laboratório ou unidade" value="'+esc(estado.gBusca)+'">')+
+   campo('Unidade','<select class="sel" id="unid">'+opt('','Todas',estado.unid)+d.unidades.map(function(u){return opt(u.id,u.nome,estado.unid)}).join('')+'</select>')+
+   campo('Laboratório','<select class="sel" data-gf="gLab">'+opt('','Todos',estado.gLab)+opt('CP','Centro Paulista',estado.gLab)+opt('INJ','Injemed',estado.gLab)+'</select>')+
+   campo('Forma','<select class="sel" data-gf="gForma">'+opt('','Todas',estado.gForma)+opt('boleto','Boleto',estado.gForma)+opt('pix','PIX',estado.gForma)+opt('cartao','Cartão',estado.gForma)+opt('outro','Outra',estado.gForma)+'</select>')+
+   campo('Vence de','<input class="sel" type="date" data-gf="gDe" value="'+esc(estado.gDe)+'">')+
+   campo('até','<input class="sel" type="date" data-gf="gAte" value="'+esc(estado.gAte)+'">')+
+   ((estado.unid||estado.gLab||estado.gForma||estado.gDe||estado.gAte||estado.gBusca)?'<button type="button" class="botao sec mini" id="limpar-g">Limpar filtros</button>':'')+
+   '<span class="contagem">'+plural(base.length,'parcela','parcelas')+' · '+R(base.reduce(function(t,x){return t+x.valor},0))+'</span></div>';
   GRUPOS.forEach(function(g){
     var s=SIT_PC[g.id]||SIT_PC.A;
     var nome=g.nome||s[0], acao=g.acao||s[2], cor=g.cor||s[4];
@@ -289,12 +326,17 @@ function telaPagamentos(d){
       h+='<div class="gp-corpo">';
       if(g.cob) h+='<div class="gp-acoes">'+(estado.unid?'<button type="button" class="botao mini" data-cob-un="'+esc(estado.unid)+'">Gerar cobrança de baixa desta unidade</button><span>Monta a mensagem para o laboratório, com datas e valores. Nada é enviado.</span>':'<span>Para gerar a mensagem de cobrança, escolha a unidade acima (ou abra um pedido).</span>')+'</div>';
       if(g.sel&&pode) h+='<div class="gp-acoes"><span>Marque as parcelas pagas com um mesmo comprovante (todas da mesma unidade).</span></div>';
-      h+='<div class="pl cab2"><span></span><span>Pedido</span><span>Unidade</span><span>Parcela</span><span>Vencimento</span><span class="r">Valor</span><span>Forma</span></div>';
+      h+='<div class="tabela sem-borda"><table class="tp"><thead><tr><th class="sel-c"></th><th>Nº DH / lab.</th><th>Unidade</th><th>Lab.</th><th>Parcela</th><th>Vencimento</th><th class="r">Valor</th><th class="r">Pago por nós</th><th>Baixa planilha</th><th>Baixa Omie</th><th>Forma</th></tr></thead><tbody>';
       l.slice(0,lim).forEach(function(x){
         var marcavel=g.sel&&pode&&x.livre>0;
-        h+='<div class="pl" role="button" tabindex="0" data-p="'+esc(x.pedido_id)+'"><span class="sel-c">'+(marcavel?'<input type="checkbox" data-selp="'+esc(x.id)+'" aria-label="Marcar parcela '+x.n+'/'+x.de+' do pedido '+esc(x.num)+'"'+(estado.sel[x.id]?' checked':'')+'>':'')+'</span>'+
-         '<span class="dh" style="font-weight:700">'+esc(x.num)+'</span><span class="p-un">'+esc(x.un)+'</span><span class="p-n num">'+x.n+'/'+x.de+'</span><span class="p-venc num">vence '+dt(x.venc)+'</span><span class="r num" style="font-weight:600">'+R(x.valor)+'</span><span class="p-forma">'+esc(FORMA[x.forma]||x.forma)+'</span></div>';
+        h+='<tr class="lp" data-p="'+esc(x.pedido_id)+'" tabindex="0"><td class="sel-c">'+(marcavel?'<input type="checkbox" data-selp="'+esc(x.id)+'" aria-label="Marcar parcela '+x.n+'/'+x.de+' do pedido '+esc(x.num)+'"'+(estado.sel[x.id]?' checked':'')+'>':'')+'</td>'+
+         '<td><b class="dh">'+esc(x.num)+'</b><span class="sub2">'+esc(x.numLab||'—')+'</span></td><td class="c-un">'+esc(x.un)+'</td><td>'+esc(x.lab==='CP'?'C. Paulista':x.labNome)+'</td>'+
+         '<td class="num">'+x.n+'/'+x.de+'</td><td class="num">'+dt(x.venc)+(x.atrasoDias>0?'<span class="sub2 vermelho">há '+x.atrasoDias+' dias</span>':'')+'</td>'+
+         '<td class="r num"><b>'+R(x.valor)+'</b></td><td class="r num">'+(x.pago?R(x.pago)+(x.pagoEm?'<span class="sub2">'+dt(x.pagoEm)+'</span>':''):'<span class="fraco">—</span>')+'</td>'+
+         '<td class="num">'+(x.bPlan?dt(x.bPlan):'<span class="fraco">—</span>')+'</td><td class="num">'+(x.bOmie?dt(x.bOmie):'<span class="fraco">—</span>')+'</td>'+
+         '<td class="nw">'+esc(FORMA[x.forma]||x.forma)+'</td></tr>';
       });
+      h+='</tbody></table></div>';
       if(l.length>lim) h+='<div style="padding:10px 16px"><button type="button" class="botao sec mini" data-mais="'+g.id+'">Mostrar mais ('+(l.length-lim)+' restantes)</button></div>';
       h+='</div>';
     }
@@ -343,41 +385,67 @@ function ficha(d){
   h+='<div class="sec"><h4>Linha do tempo</h4><ol class="tempo">'+et.map(function(x){return '<li class="'+x.c+'"><b>'+x.n+'</b><span>'+esc(x.d)+'</span>'+(x.e?'<em>'+esc(x.e)+'</em>':'')+'</li>'}).join('')+'</ol>'+
    '<div class="origem">Origem: '+(p.origem==='migracao'?'datas migradas do sistema antigo':'datas lançadas no sistema')+(p.etapa?'; etapa “'+esc(p.etapa)+'” veio da planilha do laboratório'+(p.etapaPrev?' (previsão '+dt(p.etapaPrev)+')':''):'')+'. Prazo do laboratório: '+lab.prazo+' dias corridos a partir do envio'+(p.prev?' (aqui vale a previsão informada)':'')+'.'+
    (p.rec&&p.recPor?' Recebimento confirmado por '+esc(p.recPor)+'.':'')+'</div></div>';
-  h+='<div class="sec"><h4>Itens <small>'+plural(p.itens.length,'produto','produtos')+'</small></h4>';
+  var arqPor=function(cods){return p.arq.filter(function(a){return cods.indexOf(a.cod)>=0})};
+  var usados={};
+  var lnk=function(a,rot){usados[a.id]=1;return a.abre?'<button type="button" class="link" data-abrir="'+esc(a.id)+'">'+esc(rot||'abrir')+'</button>':'<span class="fraco" title="Arquivo do sistema antigo, ainda não copiado">'+esc(rot||'')+' (no sistema antigo)</span>'};
+  var arqLista=function(l){return '<ul class="arqs">'+l.map(function(a){usados[a.id]=1;return '<li><span class="nm">'+esc(a.nome)+(a.subst?' <span class="tag t-gray mini">substituído</span>':'')+'</span><span class="ct">'+esc(a.cat)+'</span><span class="ab">'+(a.abre?'<button type="button" class="link" data-abrir="'+esc(a.id)+'">abrir</button>':'<span class="fraco">no sistema antigo</span>')+'</span></li>'}).join('')+'</ul>'};
+  var porId={}; p.arq.forEach(function(a){porId[a.id]=a});
+  var colA='', colB='';
+  // Itens
+  colA+='<div class="sec"><h4>Itens <small>'+plural(p.itens.length,'produto','produtos')+'</small></h4>';
   if(p.itens.length){
-    h+='<table class="t"><thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>'+
+    colA+='<table class="t"><thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>'+
      p.itens.map(function(it){return '<tr><td>'+esc(it.prod)+'</td><td class="r">'+Number(it.qtd).toLocaleString('pt-BR')+'</td><td class="r">'+R(it.preco)+'</td><td class="r">'+R(it.total)+'</td></tr>'}).join('')+
      '</tbody><tfoot><tr><td colspan="3">Produtos</td><td class="r">'+R(p.sub)+'</td></tr><tr><td colspan="3" style="font-weight:400">Frete</td><td class="r" style="font-weight:400">'+R(p.frete)+'</td></tr><tr><td colspan="3">Total do pedido</td><td class="r">'+R(p.total)+'</td></tr></tfoot></table>';
-  } else h+='<div style="color:var(--muted)">Nenhum item cadastrado. No sistema antigo este pedido não tinha os produtos lançados. (Completar itens chega na próxima etapa.)</div>';
-  h+='<div class="origem">Origem: itens e preços '+(p.origem==='migracao'?'migrados do sistema antigo':'lançados no sistema')+' (preço congelado na data do pedido).</div></div>';
-  h+='<div class="sec"><h4>Parcelas <small>'+R(p.parc.reduce(function(t,x){return t+x.valor},0))+' cobrados pelo laboratório</small></h4>';
-  if(!p.parc.length) h+='<div style="color:var(--muted)">Nenhuma parcela cadastrada.</div>';
-  p.parc.forEach(function(x){
-    var s=SIT_PC[x.sit]||SIT_PC.A;
-    var bx=[]; if(x.bPlan)bx.push('baixa na planilha do laboratório em '+dt(x.bPlan)); if(x.bOmie)bx.push('baixa na Omie em '+dt(x.bOmie));
-    var btn='';
-    if(x.sit==='P') btn='<button type="button" class="botao mini" data-cob-ped="'+esc(p.id)+'">Cobrar baixa</button>';
-    else if(pode&&x.livre>0) btn='<button type="button" class="botao mini" data-anexar-parc="'+esc(x.id)+'">'+(x.sit==='B'?'Anexar comprovante':'Pagar esta parcela')+'</button>';
-    h+='<div class="parc"><div><b>Parcela '+x.n+' de '+x.de+'</b> · vence '+dt(x.venc)+' · '+esc(FORMA[x.forma]||x.forma)+'</div><div class="v">'+R(x.valor)+'</div>'+
-     '<div class="d">'+(x.pago?'Pago por nós: '+R(x.pago)+(x.pagoEm?' em '+dt(x.pagoEm):'')+' (com comprovante)'+(x.livre>0&&x.sit!=='X'?' · falta '+R(x.livre):''):'Sem pagamento nosso registrado')+(bx.length?' · '+bx.join(' · '):' · sem baixa do laboratório')+(x.cancMot?' · '+esc(x.cancMot):'')+'</div>'+
-     ((x.pagamentos||[]).length?'<ul class="pags">'+x.pagamentos.map(function(g){return '<li><span>Comprovante: '+R(g.valor)+' pago em '+dt(g.pago_em)+' ('+esc(FORMA[g.forma]||g.forma)+')'+(g.registrado_por&&g.registrado_por!=='migracao'?' · registrado por '+esc(g.registrado_por):'')+'</span>'+(g.abre?'<button type="button" class="link" data-abrir="'+esc(g.arquivo_id)+'">abrir</button>':'')+'</li>'}).join('')+'</ul>':'')+
-     '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','t-blue']:s)+btn+'</div>'+
-     '<div class="d" style="color:var(--faint)">Origem: '+esc(x.orig)+'. Situação calculada pelo sistema, não digitada.</div></div>';
-  });
-  h+='</div>';
-  h+='<div class="sec"><h4>Notas fiscais <small>'+plural(p.nf.length,'nota','notas')+'</small></h4>';
-  if(p.nf.length) h+='<table class="t"><thead><tr><th>Número</th><th>Emissão</th><th class="r">Frete</th><th class="r">Total</th></tr></thead><tbody>'+p.nf.map(function(n){return '<tr><td>'+esc(n.num)+(n.canc?' '+tag(['Cancelada','t-gray']):'')+'</td><td>'+dt(n.emis)+'</td><td class="r">'+R(n.frete)+'</td><td class="r">'+R(n.total)+'</td></tr>'}).join('')+'</tbody></table>';
-  else h+='<div style="color:var(--muted)">Nenhuma nota fiscal ligada a este pedido.</div>';
-  h+='<div class="origem">Origem: notas migradas do sistema antigo e do Portal Omie.</div></div>';
-  h+='<div class="sec"><h4>Anexos <small>'+plural(p.arq.length,'arquivo','arquivos')+'</small></h4>';
-  if(p.arq.length) h+='<ul class="arqs">'+p.arq.map(function(a){return '<li><span class="nm">'+esc(a.nome)+(a.subst?' <span class="tag t-gray">substituído</span>':'')+(a.abre?' <button type="button" class="link" data-abrir="'+esc(a.id)+'">abrir</button>':'')+'</span><span class="ct">'+esc(a.cat)+'</span></li>'}).join('')+'</ul>';
-  else h+='<div style="color:var(--muted)">Nenhum arquivo anexado.</div>';
-  h+='<div class="origem">Arquivos do sistema antigo aparecem só com nome e tipo (ainda não foram copiados). Os enviados por aqui abrem com “abrir”.</div></div>';
-  h+='<div class="sec"><h4>Dados do pedido</h4><dl class="kv"><dt>Nº interno</dt><dd>'+esc(p.num)+'</dd><dt>'+esc(lab.numNome)+'</dt><dd>'+esc(p.numLab||'—')+'</dd><dt>Laboratório</dt><dd>'+esc(lab.nomeLongo)+'</dd><dt>Condição padrão</dt><dd>'+esc(lab.cond)+'</dd>'+
+  } else colA+='<div class="fraco">Nenhum item cadastrado. No sistema antigo este pedido não tinha os produtos lançados.</div>';
+  colA+='<div class="origem">Origem: itens e preços '+(p.origem==='migracao'?'migrados do sistema antigo':'lançados no sistema')+' (preço congelado na data do pedido).</div></div>';
+  // Pedido e receita
+  var docs=arqPor(['pedido_venda','espelho','receita','termo']);
+  colA+='<div class="sec"><h4>Pedido e receita <small>'+plural(docs.length,'arquivo','arquivos')+'</small></h4>'+(docs.length?arqLista(docs):'<div class="fraco">Nenhum pedido de venda, espelho ou receita anexado.</div>')+'</div>';
+  // Dados
+  colA+='<div class="sec"><h4>Dados do pedido</h4><dl class="kv"><dt>Nº interno</dt><dd>'+esc(p.num)+'</dd><dt>'+esc(lab.numNome)+'</dt><dd>'+esc(p.numLab||'—')+'</dd><dt>Laboratório</dt><dd>'+esc(lab.nomeLongo)+'</dd><dt>Condição padrão</dt><dd>'+esc(lab.cond)+'</dd>'+
+   (p.rast?'<dt>Rastreio</dt><dd>'+esc(p.rast)+'</dd>':'')+
    (p.tipo?'<dt>Tipo</dt><dd>'+(p.tipo==='mae'?'Pedido mãe':'Remessa de pedido mãe')+'</dd>':'')+
    (p.obs?'<dt>Observação</dt><dd>'+esc(p.obs)+'</dd>':'')+
    (p.recObs?'<dt>Obs. do recebimento</dt><dd>'+esc(p.recObs)+'</dd>':'')+
    '</dl><div class="origem">Origem: '+(p.leg?'migrado do sistema antigo (referência '+esc(p.leg)+')':'lançado no sistema novo')+'.</div></div>';
+  // Parcelas e boletos
+  var boletosLivres=arqPor(['boleto']).filter(function(a){return !p.parc.some(function(x){return x.boleto===a.id})});
+  colB+='<div class="sec"><h4>Parcelas e boletos <small>'+R(p.parc.reduce(function(t,x){return t+x.valor},0))+' cobrados pelo laboratório</small></h4>';
+  if(!p.parc.length) colB+='<div class="fraco">Nenhuma parcela cadastrada.</div>';
+  p.parc.forEach(function(x){
+    var s=SIT_PC[x.sit]||SIT_PC.A;
+    var bx=[]; bx.push(x.bOmie?'<b>baixa na Omie '+dt(x.bOmie)+'</b>':'sem baixa na Omie'); bx.push(x.bPlan?'planilha '+dt(x.bPlan):'sem baixa na planilha');
+    var btn='';
+    if(x.sit==='P') btn='<button type="button" class="botao mini" data-cob-ped="'+esc(p.id)+'">Cobrar baixa</button>';
+    else if(pode&&x.livre>0) btn='<button type="button" class="botao mini sec" data-anexar-parc="'+esc(x.id)+'">'+(x.sit==='B'?'Anexar comprovante':'Pagar esta parcela')+'</button>';
+    var bol=x.boleto&&porId[x.boleto]?porId[x.boleto]:null;
+    colB+='<div class="parc"><div><b>Parcela '+x.n+' de '+x.de+'</b> · vence '+dt(x.venc)+' · '+esc(FORMA[x.forma]||x.forma)+'</div><div class="v">'+R(x.valor)+'</div>'+
+     '<div class="d">'+bx.join(' · ')+(x.cancMot?' · '+esc(x.cancMot):'')+'</div>'+
+     '<div class="d">Boleto: '+(bol?esc(bol.nome)+' '+lnk(bol,'abrir'):(x.forma==='boleto'?'<span class="fraco">não ligado a esta parcela'+(boletosLivres.length?' (veja os boletos do pedido abaixo)':'')+'</span>':'<span class="fraco">não se aplica</span>'))+'</div>'+
+     '<div class="d">Comprovante: '+((x.pagamentos||[]).length?x.pagamentos.map(function(g){var a=porId[g.arquivo_id];if(a)usados[a.id]=1;return R(g.valor)+' em '+dt(g.pago_em)+' ('+esc(FORMA[g.forma]||g.forma)+') '+(g.abre?'<button type="button" class="link" data-abrir="'+esc(g.arquivo_id)+'">abrir</button>':'<span class="fraco">(no sistema antigo)</span>')}).join(' · '):(x.bOmie?'<span class="fraco">não obrigatório — baixada na Omie</span>':'<span class="fraco">nenhum</span>'))+'</div>'+
+     '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','t-blue']:s)+btn+'</div></div>';
+  });
+  if(p.parc.length){var origs={};p.parc.forEach(function(x){origs[x.orig]=1});colB+='<div class="origem">Origem das parcelas: '+esc(Object.keys(origs).join('; '))+'. A situação é calculada pelo sistema: baixa na Omie = paga.</div>'}
+  if(boletosLivres.length) colB+='<div class="sub-sec"><b>Boletos do pedido</b> <span class="fraco">(vieram do sistema antigo sem indicação da parcela)</span>'+arqLista(boletosLivres)+'</div>';
+  // comprovantes soltos
+  var compSoltos=arqPor(['comprovante']).filter(function(a){return !p.parc.some(function(x){return (x.pagamentos||[]).some(function(g){return g.arquivo_id===a.id})})});
+  if(compSoltos.length) colB+='<div class="sub-sec"><b>Outros comprovantes</b>'+arqLista(compSoltos)+'</div>';
+  colB+='</div>';
+  // Notas fiscais
+  colB+='<div class="sec"><h4>Notas fiscais <small>'+plural(p.nf.length,'nota','notas')+'</small></h4>';
+  if(p.nf.length) colB+='<table class="t"><thead><tr><th>Número</th><th>Emissão</th><th class="r">Frete</th><th class="r">Total</th><th>PDF</th><th>XML</th></tr></thead><tbody>'+p.nf.map(function(n){
+     var pdf=n.danfe_id?(porId[n.danfe_id]||{id:n.danfe_id,abre:n.d_abre}):null, xml=n.xml_id?(porId[n.xml_id]||{id:n.xml_id,abre:n.x_abre}):null;
+     return '<tr><td>'+esc(n.num)+(n.canc?' '+tag(['Cancelada','t-gray']):'')+'</td><td>'+dt(n.emis)+'</td><td class="r">'+R(n.frete)+'</td><td class="r">'+R(n.total)+'</td><td>'+(pdf?lnk(pdf,'PDF'):'<span class="fraco">—</span>')+'</td><td>'+(xml?lnk(xml,'XML'):'<span class="fraco">—</span>')+'</td></tr>'}).join('')+'</tbody></table>';
+  else colB+='<div class="fraco">Nenhuma nota fiscal ligada a este pedido.</div>';
+  var nfSoltas=arqPor(['nota_fiscal','xml_nf']).filter(function(a){return !usados[a.id]});
+  if(nfSoltas.length) colB+='<div class="sub-sec"><b>Arquivos de nota sem número ligado</b>'+arqLista(nfSoltas)+'</div>';
+  colB+='<div class="origem">Origem: notas migradas do sistema antigo e do Portal Omie.</div></div>';
+  // Outros anexos
+  var outros=p.arq.filter(function(a){return !usados[a.id]});
+  colB+='<div class="sec"><h4>Outros anexos <small>'+plural(outros.length,'arquivo','arquivos')+'</small></h4>'+(outros.length?arqLista(outros):'<div class="fraco">Nenhum.</div>')+'</div>';
+  h+='<div class="f-cols"><div class="col">'+colA+'</div><div class="col">'+colB+'</div></div>';
+  h+='<div class="origem">Arquivos marcados “no sistema antigo” ainda não foram copiados para o sistema novo. Os enviados por aqui abrem com “abrir”.</div>';
   h+='</div>';
   return h;
 }
@@ -528,6 +596,7 @@ var tBusca;
 document.addEventListener('click',function(e){
   var b=e.target.closest('button,[data-p],input[type=checkbox]'); if(!b) return;
   if(b.matches('input[type=checkbox]')){
+    if(b.id==='so-acao'){estado.acao=b.checked;cache.pedidos=null;render();carregarPedidos();e.stopPropagation();return}
     if(b.dataset.selp){estado.sel[b.dataset.selp]=b.checked;var y=window.scrollY;render();window.scrollTo(0,y)}
     else if(b.dataset.anx) atualizaValorAnexo();
     e.stopPropagation(); return;
@@ -561,6 +630,8 @@ document.addEventListener('click',function(e){
   if(b.dataset.f){var f=b.dataset.f,v=b.dataset.v;
     if(f==='sit')estado.sit=v; else if(f==='lab')estado.lab=v; else if(f==='acao')estado.acao=!estado.acao; else if(f==='esp')estado.especial='';
     cache.pedidos=null;render();carregarPedidos();return}
+  if(b.id==='limpar-filtros'){estado.sit='';estado.lab='';estado.acao=false;estado.pUn='';estado.pDe='';estado.pAte='';estado.pPag='';estado.busca='';estado.especial='';cache.pedidos=null;render();carregarPedidos();return}
+  if(b.id==='limpar-g'){estado.unid='';estado.gLab='';estado.gForma='';estado.gDe='';estado.gAte='';estado.gBusca='';render();return}
   if(b.id==='maisPed'){b.disabled=true;b.textContent='Carregando…';carregarPedidos(true);return}
   if(b.dataset.g){var id=b.dataset.g;var cur=b.getAttribute('aria-expanded')==='true';estado.abertos[id]=!cur;render();return}
   if(b.dataset.mais){estado.abertos['lim'+b.dataset.mais]=(estado.abertos['lim'+b.dataset.mais]||25)+50;render();return}
@@ -568,7 +639,7 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){if($('#dlg').classList.contains('on'))fecharDlg();else fecharFicha();return}
-  if((e.key==='Enter'||e.key===' ')&&e.target.matches('.pl[data-p]')){e.preventDefault();abrirFicha(e.target.dataset.p)}
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches('.pl[data-p],tr.lp[data-p]')){e.preventDefault();abrirFicha(e.target.dataset.p)}
 });
 $('#veu').addEventListener('click',fecharFicha);
 $('#dlg').addEventListener('click',function(e){if(e.target.id==='dlg')fecharDlg()});
@@ -577,11 +648,18 @@ document.addEventListener('submit',function(e){
   if(id==='f-login')entrar(e); else if(id==='f-senha')salvarSenha(e); else if(id==='f-mfa')confirmarMfa(e);
   else if(id==='f-receber')enviarReceber(e); else if(id==='f-anexo')enviarAnexo(e);
 });
+var tBuscaG;
 document.addEventListener('input',function(e){
+  if(e.target.id==='g-busca'){estado.gBusca=e.target.value;clearTimeout(tBuscaG);tBuscaG=setTimeout(function(){var pos=e.target.selectionStart;render();var n=$('#g-busca');if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}},250);return}
   if(e.target.id==='busca'){estado.busca=e.target.value;clearTimeout(tBusca);tBusca=setTimeout(function(){
     var pos=e.target.selectionStart;cache.pedidos=null;carregarPedidos().then(function(){var n=$('#busca');if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}})},300)}
 });
-document.addEventListener('change',function(e){if(e.target.id==='unid'){estado.unid=e.target.value;render()}});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.id==='unid'){estado.unid=t.value;render();return}
+  if(t.dataset.pf){estado[t.dataset.pf]=t.value;cache.pedidos=null;render();carregarPedidos();return}
+  if(t.dataset.gf){estado[t.dataset.gf]=t.value;render();return}
+});
 
 /* tema */
 var TEMAS=['auto','light','dark'],NOME_T={auto:'automático',light:'claro',dark:'escuro'},tema='auto';

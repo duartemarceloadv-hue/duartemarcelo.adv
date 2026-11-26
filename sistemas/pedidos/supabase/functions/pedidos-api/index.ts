@@ -64,7 +64,7 @@ const SIT_P: Record<string, string> = {
   enviado_ao_laboratorio: "E", no_laboratorio: "L", a_caminho: "C", recebido: "R", cancelado: "X", rascunho: "D",
 };
 const SIT_PC: Record<string, string> = {
-  vencida: "V", a_vencer: "A", paga_aguardando_baixa: "P", baixada_sem_comprovante: "B", quitada: "Q", cancelada: "X",
+  vencida: "V", a_vencer: "A", paga_aguardando_baixa: "P", baixa_so_planilha: "B", quitada: "Q", cancelada: "X",
 };
 const FORMAS = ["cartao", "pix", "boleto", "outro"];
 const FORMA_NOME: Record<string, string> = { cartao: "cartão", pix: "PIX", boleto: "boleto", outro: "outra forma" };
@@ -194,7 +194,7 @@ async function carregar(c: Ctx, pedidoId?: string) {
       sit: SIT_PC[a.situacao] || "A", pago: a.pago, pagoEm: a.pago_em, orig: origemParcela(a.origem), cancMot: a.canc_mot,
     };
     o.prox7 = o.sit === "A" && o.venc <= h7;
-    o.livre = o.sit === "X" || p.sit === "X" ? 0 : Math.max(0, r2(o.valor - o.pago));
+    o.livre = o.sit === "X" || o.sit === "Q" || p.sit === "X" ? 0 : Math.max(0, r2(o.valor - o.pago));
     p.parc.push(o);
     PARC.push(o);
   }
@@ -223,9 +223,12 @@ function acoesDo(p: Ped) {
   if (p.diasCaminho > 7) a.push({ peso: 50, cor: "--amber", txt: "Confirmar recebimento — a caminho há " + p.diasCaminho + " dias" });
   if (p.labDizEnviou) a.push({ peso: 45, cor: "--amber", txt: "Confirmar recebimento — o laboratório marcou “" + p.etapa.toLowerCase() + "”, mas não temos a data de envio" });
   const pb = cnt("P");
-  if (pb.n) a.push({ peso: 35, cor: "--amber", txt: "Cobrar baixa do laboratório — " + plural(pb.n, "parcela paga", "parcelas pagas") + " sem baixa" });
+  if (pb.n) a.push({ peso: 35, cor: "--amber", txt: "Cobrar baixa na Omie — " + plural(pb.n, "parcela paga", "parcelas pagas") + " por nós, ainda sem baixa" });
   const b = cnt("B");
-  if (b.n) a.push({ peso: 30, cor: "--amber", txt: "Anexar comprovante — " + plural(b.n, "parcela baixada", "parcelas baixadas") + " sem comprovante nosso" });
+  if (b.n) {
+    const bol = p.parc.some((x: Parc) => x.sit === "B" && x.forma === "boleto");
+    a.push({ peso: 40, cor: "--amber", txt: (bol ? "Conferir boleto — " : "Conferir pagamento — ") + plural(b.n, "parcela baixada", "parcelas baixadas") + " só na planilha, sem baixa na Omie" });
+  }
   if (p.sub === 0) a.push({ peso: 25, cor: "--gray", txt: "Completar itens — pedido sem itens cadastrados" });
   a.sort((x, y) => y.peso - x.peso);
   return a;
@@ -257,28 +260,77 @@ async function aInicio(c: Ctx) {
     },
   };
 }
-const linhaPedido = (p: Ped) => ({
-  id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, env: p.env, sit: p.sit,
-  sub: p.sub, total: p.total, atraso: p.atraso, acoes: p.acoes,
-});
+const linhaPedido = (p: Ped, nfs: Record<string, string[]>) => {
+  const ativas = p.parc.filter((x: Parc) => x.sit !== "X");
+  const abertas = ativas.filter((x: Parc) => x.livre > 0 && x.sit !== "B").sort((a: Parc, b: Parc) => (a.venc < b.venc ? -1 : 1));
+  return {
+    id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id,
+    env: p.env, prazo: p.prazo, exp: p.exp, rec: p.rec, rast: p.rast, etapa: p.etapa, sit: p.sit,
+    sub: p.sub, frete: p.frete, total: p.total, atraso: p.atraso, diasCaminho: p.diasCaminho, acoes: p.acoes,
+    parc: {
+      n: ativas.length,
+      ok: ativas.filter((x: Parc) => x.sit === "Q" || x.sit === "P").length,
+      venc: ativas.filter((x: Parc) => x.sit === "V").length,
+      semComp: ativas.filter((x: Parc) => x.sit === "B").length,
+      valor: r2(ativas.reduce((t: number, x: Parc) => t + x.valor, 0)),
+      falta: r2(abertas.reduce((t: number, x: Parc) => t + x.livre, 0)),
+      prox: abertas[0]?.venc || null,
+    },
+    nf: nfs[p.id] || [],
+  };
+};
+const ORDEM: Record<string, (x: Ped, y: Ped) => number> = {
+  urgencia: (x, y) => y.urg - x.urg || y.atraso - x.atraso || ((y.env || "") > (x.env || "") ? 1 : -1),
+  recentes: (x, y) => ((y.env || "") > (x.env || "") ? 1 : (y.env || "") < (x.env || "") ? -1 : 0) || (y.num > x.num ? 1 : -1),
+  antigos: (x, y) => ((x.env || "9") > (y.env || "9") ? 1 : (x.env || "9") < (y.env || "9") ? -1 : 0) || (x.num > y.num ? 1 : -1),
+  valor: (x, y) => y.total - x.total,
+  atraso: (x, y) => y.atraso - x.atraso || y.diasCaminho - x.diasCaminho,
+  unidade: (x, y) => x.un.localeCompare(y.un, "pt-BR") || ((y.env || "") > (x.env || "") ? 1 : -1),
+};
 async function aPedidos(c: Ctx, b: any) {
   const { HOJE, PED } = await carregar(c);
   const busca = String(b.busca || "").trim().toLowerCase().slice(0, 80);
   const sit = String(b.sit || ""), lab = String(b.lab || ""), esp = String(b.especial || "");
+  const un = b.unidade_id ? uuid(b.unidade_id, "unidade") : "";
+  const de = b.de ? dataValida(b.de, "data inicial") : "", ate = b.ate ? dataValida(b.ate, "data final") : "";
+  const pag = String(b.pag || "");
+  const ordem = ORDEM[String(b.ordem || "urgencia")] || ORDEM.urgencia;
   if (esp && !FILTRO[esp]) throw new Erro(400, "Filtro desconhecido.");
+  const uns: Record<string, string> = {};
+  PED.forEach((p) => (uns[p.unidade_id] = p.un));
   const l = PED.filter((p) => {
     if (esp && !FILTRO[esp](p)) return false;
     if (sit && p.sit !== sit) return false;
     if (lab && p.lab !== lab) return false;
+    if (un && p.unidade_id !== un) return false;
+    if (de && (!p.env || p.env < de)) return false;
+    if (ate && (!p.env || p.env > ate)) return false;
+    if (pag) {
+      const s = new Set(p.parc.map((x: Parc) => x.sit));
+      if (pag === "V" && !s.has("V")) return false;
+      if (pag === "B" && !s.has("B")) return false;
+      if (pag === "P" && !s.has("P")) return false;
+      if (pag === "aberto" && !p.parc.some((x: Parc) => x.livre > 0 && x.sit !== "B")) return false;
+      if (pag === "sem" && p.parc.length) return false;
+    }
     if (b.so_acao && !p.acoes.length) return false;
-    if (busca && (p.num + " " + (p.numLab || "") + " " + p.un).toLowerCase().indexOf(busca) < 0) return false;
+    if (busca && (p.num + " " + (p.numLab || "") + " " + p.un + " " + (p.rast || "")).toLowerCase().indexOf(busca) < 0) return false;
     return true;
-  }).sort((x, y) => y.urg - x.urg || y.atraso - x.atraso || ((y.env || "") > (x.env || "") ? 1 : -1));
+  }).sort(ordem);
   const ini = Math.max(0, Math.floor(+b.inicio || 0));
-  const lim = Math.min(200, Math.max(1, Math.floor(+b.limite || 60)));
+  const lim = Math.min(200, Math.max(1, Math.floor(+b.limite || 100)));
+  const pagina = l.slice(ini, ini + lim);
+  const nfs: Record<string, string[]> = {};
+  if (pagina.length) {
+    const ids = pagina.map((p) => p.id);
+    const r = await sql`select np.pedido_id, n.numero from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id
+      where np.pedido_id = any(${arr(ids)}::uuid[]) and not n.cancelada order by n.numero`;
+    for (const x of r) (nfs[x.pedido_id] ||= []).push(x.numero);
+  }
   return {
     hoje: HOJE, qtd: l.length, total: r2(l.reduce((t, p) => t + p.total, 0)),
-    itens: l.slice(ini, ini + lim).map(linhaPedido),
+    unidades: Object.entries(uns).map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+    itens: pagina.map((p) => linhaPedido(p, nfs)),
   };
 }
 async function aPedido(c: Ctx, b: any) {
@@ -288,17 +340,24 @@ async function aPedido(c: Ctx, b: any) {
   if (!p) throw new Erro(404, "Pedido não encontrado (ou fora das suas unidades).", "nao_encontrado");
   const itens = await sql`select pr.descricao prod, i.qtd::float8 qtd, i.preco_unit::float8 preco, i.total::float8 total
     from pedidos_novo.pedido_item i join pedidos_novo.produto pr on pr.id = i.produto_id where i.pedido_id = ${id} order by pr.descricao`;
-  const nf = await sql`select n.numero num, n.emissao::text emis, n.total::float8 total, n.frete::float8 frete, n.cancelada canc
-    from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id where np.pedido_id = ${id} order by n.emissao, n.numero`;
+  const nf = await sql`select n.id, n.numero num, n.emissao::text emis, n.total::float8 total, n.frete::float8 frete, n.cancelada canc,
+    n.danfe_id, d.bucket = ${BUCKET} d_abre, n.xml_id, x.bucket = ${BUCKET} x_abre
+    from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id
+    left join pedidos_novo.arquivo d on d.id = n.danfe_id left join pedidos_novo.arquivo x on x.id = n.xml_id
+    where np.pedido_id = ${id} order by n.emissao, n.numero`;
   const arq = await sql`select a.id, a.nome, a.categoria, a.substituido_por is not null subst, a.bucket = ${BUCKET} abre, a.enviado_em::text enviado_em, a.enviado_por
     from pedidos_novo.pedido_arquivo pa join pedidos_novo.arquivo a on a.id = pa.arquivo_id where pa.pedido_id = ${id} order by a.enviado_em, a.nome`;
   const pags = await sql`select pp.parcela_id, g.pago_em::text pago_em, pp.valor::float8 valor, g.forma, a.nome arquivo, a.id arquivo_id, a.bucket = ${BUCKET} abre, g.registrado_por
     from pedidos_novo.pagamento_parcela pp join pedidos_novo.pagamento g on g.id = pp.pagamento_id
     join pedidos_novo.arquivo a on a.id = g.comprovante_id
     join pedidos_novo.parcela pa on pa.id = pp.parcela_id where pa.pedido_id = ${id} order by g.pago_em`;
-  for (const x of p.parc) x.pagamentos = pags.filter((g) => g.parcela_id === x.id);
+  const bol = await sql`select id, boleto_arquivo_id from pedidos_novo.parcela where pedido_id = ${id}`;
+  for (const x of p.parc) {
+    x.pagamentos = pags.filter((g) => g.parcela_id === x.id);
+    x.boleto = bol.find((y) => y.id === x.id)?.boleto_arquivo_id || null;
+  }
   p.itens = itens; p.nf = nf;
-  p.arq = arq.map((a) => ({ id: a.id, nome: a.nome, cat: CAT[a.categoria] || a.categoria, subst: a.subst, abre: a.abre, em: a.enviado_em, por: a.enviado_por }));
+  p.arq = arq.map((a) => ({ id: a.id, nome: a.nome, cod: a.categoria, cat: CAT[a.categoria] || a.categoria, subst: a.subst, abre: a.abre, em: a.enviado_em, por: a.enviado_por }));
   p.obsLonga = p.obs;
   return { hoje: HOJE, lab: LABS[p.lab], pedido: p, pode_gravar: PAPEIS_ESCRITA.includes(c.papel) };
 }
@@ -311,7 +370,7 @@ async function aPagamentos(c: Ctx, b: any) {
   PARC.forEach((x) => (uns[porId[x.pedido_id].unidade_id] = porId[x.pedido_id].un));
   const lista = PARC.filter((x) => !un || porId[x.pedido_id].unidade_id === un).map((x) => {
     const p = porId[x.pedido_id];
-    return { id: x.id, pedido_id: p.id, num: p.num, un: p.un, unidade_id: p.unidade_id, n: x.n, de: x.de, venc: x.venc, valor: x.valor, forma: x.forma, sit: x.sit, prox7: x.prox7, livre: x.livre };
+    return { id: x.id, pedido_id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id, n: x.n, de: x.de, venc: x.venc, valor: x.valor, forma: x.forma, sit: x.sit, prox7: x.prox7, livre: x.livre, pago: x.pago, pagoEm: x.pagoEm, bPlan: x.bPlan, bOmie: x.bOmie, atrasoDias: x.sit === "V" ? dias(x.venc, HOJE) : 0 };
   });
   return {
     hoje: HOJE, h7,
@@ -472,7 +531,7 @@ async function aCobrancaBaixa(c: Ctx, b: any) {
     const lab = g[0];
     const total = r2(g.reduce((t, x) => t + x.valor, 0));
     const linhas = g.map((x) => {
-      const falta = [!x.baixa_planilha_em ? "planilha" : null, !x.baixa_omie_em ? "Omie" : null].filter(Boolean).join(" e ");
+      const falta = "Omie" + (!x.baixa_planilha_em ? " (e na planilha)" : "");
       const pg = (x.pags || []).map((p: any) => `pago em ${dt(p.em)} por ${FORMA_NOME[p.forma] || p.forma} (${R(+p.valor)})`).join("; ");
       return `• ${lab.num_nome || "Pedido"} ${x.num_lab || "—"} (nosso ${x.num}) — ${x.un}${x.cnpj ? " (CNPJ " + fmtCnpj(x.cnpj) + ")" : ""}\n` +
         `  Parcela ${x.n}/${x.de}, vencimento ${dt(x.venc)}, valor ${R(x.valor)} — ${pg}. Falta a baixa na ${falta}.`;

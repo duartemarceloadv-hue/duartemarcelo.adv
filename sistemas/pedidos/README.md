@@ -15,7 +15,7 @@ conforme o documento de decisão do conselho de 26/11/2026.
 |---|---|
 | Quem pede | No início a central pede e a unidade confirma o recebimento; a unidade passa a pedir na fase 2 |
 | Quem paga | Cada unidade (CNPJ) paga o seu |
-| Pagamento | Comprovante + planilha do laboratório + baixa na Omie têm que bater. Com comprovante e sem baixa: "paga, aguardando baixa", e o sistema gera a cobrança ao laboratório |
+| Pagamento | A Omie é o controle do laboratório: **baixa na Omie = paga**, com ou sem comprovante nosso. Comprovante sem baixa na Omie: "paga, aguardando baixa" (o sistema gera a cobrança). Baixa só na planilha: "conferir" pela forma de pagamento (ex.: boleto pendente) |
 | Aprovação | Pedido não precisa de aprovação |
 | Prazo do laboratório | 30 dias corridos (não há prazo contratado) |
 | Prescritor | Só o RT do termo da unidade com o laboratório |
@@ -26,6 +26,7 @@ conforme o documento de decisão do conselho de 26/11/2026.
 
 ## Estrutura (migrations)
 
+- `0005_omie_e_controle_do_laboratorio.sql`: situação da parcela pela regra da Omie (26/11/2026).
 - `supabase/migrations/0001_pedidos_novo_base.sql`: cadastros, pedido, receita com saldo, parcela × pagamento,
   nota fiscal, pendências, execução dos conectores, situação calculada (`v_pedido`, `v_parcela`),
   registro de alterações imutável e isolamento total (RLS em tudo, sem acesso pela internet).
