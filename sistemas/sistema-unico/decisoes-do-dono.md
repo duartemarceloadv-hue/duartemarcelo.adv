@@ -9,3 +9,5 @@
 | 27/11/2026 | D5 | **Sem IA dentro do sistema** por enquanto (custo zero). A leitura de NF/PV é feita a pedido do dono (diária, manual, no Claude), não automática. Custo mensal: só o que já existe (Supabase grátis, Netlify). |
 | 27/11/2026 | D6 | **Só o dono (Operações) é administrador.** Sem segundo administrador por ora. |
 | 27/11/2026 | D9 | Avisos **somente na tela** (Início) por enquanto. Sem e-mail nem WhatsApp. |
+| 27/11/2026 | D8-bis | Sócio vê o mesmo que Operações, só das lojas dele, **sem exceção** por enquanto (inclui Jurídico, saúde e metas). Rever quando o módulo Jurídico tiver processos que envolvam o próprio sócio. |
+| 27/11/2026 | D8 | Mantida a premissa: Operações pode tudo, com registro (única administradora). |
