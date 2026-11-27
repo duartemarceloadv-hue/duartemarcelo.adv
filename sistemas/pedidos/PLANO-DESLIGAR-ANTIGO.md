@@ -8,6 +8,13 @@ Objetivo do dono: desligar o sistema antigo; **tudo** o que existe nele precisa 
 - Robôs: planilha (07:00), rastreio Quality (07:20) e recepção da Omie (função `omie`, mesmo formato do sistema atual).
 - Omie (carga inicial 27/11): 369 NFs lidas, 516 parcelas ligadas à NF/boleto (192 com linha digitável), 318 NFs com link do portal, 14 baixas novas.
 
+## Arquivo do sistema antigo (feito em 27/11/2026)
+Cópia fiel, somente leitura, em `pedidos_novo.legado_doc` (1.033 registros: 479 pedidos, 385 NFs Omie, 53 clínicas, 51 receitas,
+48 prescritores, 13 insumos, 4 configurações — a configuração das automações ficou de fora por conter credenciais),
+`pedidos_novo.legado_log` (6.178 registros de histórico, 05/10 a 26/11 — conferido faixa a faixa) e `pedidos_novo.legado_tabela`
+(Injemed: pedidos, contrato, insumos, modelos, unidades, log; laboratórios; 21 usuários). Função `importar-legado` (upsert) refaz a cópia
+na virada. Nada do sistema antigo se perde, mesmo campos que o novo não usa.
+
 ## Falta trazer (ordem de trabalho)
 1. **Documentos (arquivos)** — 1.344 arquivos / ~207 MB do bucket `anexos` + `injemed`. Hoje o sistema novo só aponta para o antigo.
    O banco único está no plano gratuito (1 GB) e já usa ~853 MB (Documentos) → **precisa do Supabase Pro** para copiar.
@@ -28,6 +35,11 @@ Objetivo do dono: desligar o sistema antigo; **tudo** o que existe nele precisa 
 5. **Usuários**: 21 no sistema antigo (hoje só 2 no novo) — definir quem continua e com qual papel.
 6. **Sincronização final** na virada: congelar o antigo (só leitura) e trazer o que mudou depois de 26/11 05:33 UTC
    (2 pedidos novos DH-2026-0471/0472, 274 pedidos alterados, 87 registros de histórico, anexos).
+
+## Estoque Nutra (decisão do dono, 27/11/2026)
+Vem para o banco único como **módulo à parte** (área `nutra`), depois incorporado ao sistema de Compras e Estoque.
+O site estoque-nutra-drhair continua igual; na virada troca só o endereço do banco. Logins: as 18 contas do sistema antigo
+vêm com a **mesma senha** (cópia cifrada), feita no dia da virada.
 
 ## Atenção
 - O mesmo projeto Supabase antigo também guarda o **Estoque Nutra** (`nut_*`, em uso: respostas até 26/11) e restos de Compras (`cmp_*`, piloto)
