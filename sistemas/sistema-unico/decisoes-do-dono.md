@@ -12,3 +12,4 @@
 | 27/11/2026 | D8-bis | Sócio vê o mesmo que Operações, só das lojas dele, **sem exceção** por enquanto (inclui Jurídico, saúde e metas). Rever quando o módulo Jurídico tiver processos que envolvam o próprio sócio. |
 | 27/11/2026 | D8 | Mantida a premissa: Operações pode tudo, com registro (única administradora). |
 | 27/11/2026 | D4 | **Sistema novo vai para o Cloudflare Pages** (grátis), com Netlify como reserva. Sistemas atuais continuam onde estão. Pendente: o dono criar a conta grátis no Cloudflare (com verificação em duas etapas). |
+| 27/11/2026 | D13 | **Vale o número DH do sistema antigo.** No dia da troca, os 43 pedidos divergentes passam a usar o número do antigo; os que só existem no novo (inclusive os que ocupam 0469–0472) ganham número novo acima do maior existente; o número anterior fica guardado e pesquisável na ficha. |
