@@ -56,6 +56,16 @@ quem é administrador ou financeiro cadastra um aplicativo autenticador (código
 Ações da API (POST com `acao`): `sessao`, `trocar_senha`, `inicio`, `pedidos`, `pedido`, `pagamentos`,
 `confirmar_recebimento`, `anexar_comprovante`, `baixar_sem_comprovante`, `cobranca_baixa`, `abrir_arquivo`,
 `editar_pedido`, `cancelar_pedido`, `reabrir_pedido` (só admin), `salvar_parcela`, `cancelar_parcela`, `produtos`, `salvar_itens`.
+`unidades` (lista das unidades do usuário para o seletor do cabeçalho; 27/11/2026) e `inicio` aceita `unidade_id`.
+
+**Casca e ficha (27/11/2026):** a tela segue o kit do sistema único (menu lateral navy com Laboratórios › Pedidos / Pagamentos,
+cabeçalho fixo de 56 px com seletor de unidade que vale em todas as telas e fica guardado no navegador, Nunito Sans em 4 tamanhos,
+5 cores de situação, sem rolagem interna; no celular o menu vira barra inferior). A ficha do pedido é página própria
+(`#pedido/<id>`) e segue "uma informação, um lugar só": cabeçalho (número, unidade, laboratório, situação, total) → O que falta →
+Itens → Entrega (envio, previsão, saída, rastreio, recebimento) → Pagamento (boleto e comprovante na própria parcela) →
+Notas fiscais (DANFE, XML, Portal Omie, conferência) → Outros anexos → Do sistema antigo (só campos que não existem no novo) →
+Histórico (eventos do sistema novo e do antigo mesclados por data). A função `pedidos-historico` devolve também `campos`
+(dados do sistema antigo com nomes fixos) e `novos` (registro de alterações do sistema novo em texto).
 
 **Edição (27/11/2026):** dados do pedido, cancelamento com motivo (nada é apagado), parcelas (lançar, corrigir, cancelar;
 parcela com comprovante não pode ser cancelada nem ficar menor que o pago) e itens (preço sugerido pela tabela vigente na data do envio).

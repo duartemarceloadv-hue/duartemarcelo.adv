@@ -23,7 +23,7 @@ const arr = (l: string[]) => "{" + l.join(",") + "}";
 
 // ---------- eventos do sistema novo em texto ----------
 const fmtR = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const R = (v: unknown) => fmtR.format(Number(v) || 0).replace(/ /g, " ");
+const R = (v: unknown) => fmtR.format(Number(v) || 0).replace(/\u00a0/g, " ");
 const dt = (s: string) => { const p = s.slice(0, 10).split("-"); return p[2] + "/" + p[1] + "/" + p[0]; };
 const FORMA: Record<string, string> = { cartao: "Cartão", pix: "PIX", boleto: "Boleto", outro: "Outra forma" };
 type Rot = Record<string, [string, string?]>; // campo -> [rótulo, tipo: d=data r=R$ u=unidade f=forma l=ligado b=sim/não]

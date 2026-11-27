@@ -201,7 +201,8 @@ async function iniciar(){
   topoUsuario();
   if(EU.trocar_senha){mostrarTrocaSenha();return}
   if(EU.precisa_mfa&&EU.aal!=='aal2'){mostrarMfa();return}
-  try{UNIDADES=(await api('unidades')).unidades||[]}catch(x){UNIDADES=[]}
+  try{UNIDADES=(await api('unidades')).unidades||[]}
+  catch(x){try{UNIDADES=(await api('pedidos',{limite:1})).unidades||[]}catch(y){UNIDADES=[]}} // API antiga sem a ação 'unidades'
   casca(true); montaUnidades();
   rota(true);
 }
@@ -268,7 +269,7 @@ function telaPedidos(d){
     d?plural(d.qtd,'pedido','pedidos')+' · total '+R(d.total)+(escopoTxt()?' · '+escopoTxt():''):'');
   if(estado.especial) h+='<div class="filtros"><span class="fraco">Vindo do Início:</span><button type="button" class="botao sec mini" data-f="esp" data-v="">'+esc(FILTRO_NOME[estado.especial])+' — tirar filtro</button></div>';
   h+='<div class="filtros">'+
-   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">','busca')+
+   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">','c-busca')+
    campo('Laboratório','<select class="sel" data-pf="lab">'+opt('','Todos',estado.lab)+opt('CP','Centro Paulista',estado.lab)+opt('INJ','Injemed',estado.lab)+'</select>')+
    campo('Situação','<select class="sel" data-pf="sit">'+opt('','Todas',estado.sit)+opt('E','No laboratório',estado.sit)+opt('L','Confirmado pelo lab.',estado.sit)+opt('C','A caminho',estado.sit)+opt('R','Recebidos',estado.sit)+opt('X','Cancelados',estado.sit)+'</select>')+
    campo('Pagamento','<select class="sel" data-pf="pPag">'+opt('','Todos',estado.pPag)+opt('V','Com parcela vencida',estado.pPag)+opt('aberto','Com parcela a pagar',estado.pPag)+opt('P','Falta baixa na Omie',estado.pPag)+opt('B','Falta baixa na planilha',estado.pPag)+opt('N','Falta nossa baixa',estado.pPag)+opt('sem','Sem parcelas',estado.pPag)+'</select>')+
@@ -340,7 +341,7 @@ function telaPagamentos(d){
   var pode=d.pode_gravar;
   var h=titulo('Pagamentos','','Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito'+(escopoTxt()?' ('+escopoTxt()+')':'')+'.'+(pode?' Marque as parcelas pagas com o mesmo comprovante e clique em “Anexar comprovante”.':''))+
    '<div class="filtros">'+
-   campo('Buscar','<input class="busca" id="g-busca" type="search" placeholder="Nº DH, nº do laboratório ou unidade" value="'+esc(estado.gBusca)+'">','busca')+
+   campo('Buscar','<input class="busca" id="g-busca" type="search" placeholder="Nº DH, nº do laboratório ou unidade" value="'+esc(estado.gBusca)+'">','c-busca')+
    campo('Laboratório','<select class="sel" data-gf="gLab">'+opt('','Todos',estado.gLab)+opt('CP','Centro Paulista',estado.gLab)+opt('INJ','Injemed',estado.gLab)+'</select>')+
    campo('Forma','<select class="sel" data-gf="gForma">'+opt('','Todas',estado.gForma)+opt('boleto','Boleto',estado.gForma)+opt('pix','PIX',estado.gForma)+opt('cartao','Cartão',estado.gForma)+opt('outro','Outra',estado.gForma)+'</select>')+
    campo('Vence de','<input class="sel" type="date" data-gf="gDe" value="'+esc(estado.gDe)+'">')+
@@ -397,7 +398,9 @@ async function carregarPagamentos(){
    Pagamento = parcelas com boleto e comprovante; Notas fiscais = DANFE, XML, Portal Omie e conferência;
    Outros anexos = o que não apareceu antes; Do sistema antigo = só o que não existe no sistema novo; Histórico por último. */
 var API_HIST=SUPA_URL+'/functions/v1/pedidos-historico';
-function dtHora(s){if(!s)return '—';var d=new Date(String(s).replace(' ','T'));return isNaN(d)?esc(s):d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+// aceita '2026-11-27 01:37:25.123+00' (texto do Postgres) e ISO
+function quando(s){return new Date(String(s||'').trim().replace(' ','T').replace(/([+-]\d{2})$/,'$1:00'))}
+function dtHora(s){if(!s)return '—';var d=quando(s);return isNaN(d)?esc(s):d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function secao(id,tit,q,ac,corpo){return '<section class="sec" id="'+id+'"><div class="sh"><h2>'+esc(tit)+'</h2>'+(q?'<span class="q">'+q+'</span>':'')+(ac||'')+'</div>'+corpo+'</section>'}
 function kvi(k,v,cls){return '<div><dt>'+esc(k)+'</dt><dd'+(cls?' class="'+cls+'"':'')+'>'+v+'</dd></div>'}
 var ALVO_ACAO=[[/^(Pagar|Pedir baixa|Dar baixa|Pedir atualiza|Cobrar baixa|Anexar)/,'sec-pag'],[/^(Cobrar laborat|Confirmar receb)/,'sec-entrega'],[/^Completar itens/,'sec-itens']];
@@ -534,12 +537,12 @@ function ficha(d,hist){
       if(v(ant.forma)) campos.push(['Forma de pagamento',esc(ant.forma)]);
     }
     [['dataPag','Data de pagamento'],['dataPagLab','Data de pagamento na planilha do laboratório']].forEach(function(c){var x=ant[c[0]];if(v(x)&&!datas[String(x).slice(0,10)])campos.push([c[1],ver(x)])});
-    if(campos.length) sAnt='<dl class="kv kv3 cp">'+campos.map(function(c){return kvi(c[0],c[1])}).join('')+'</dl>';
+    if(campos.length) sAnt='<div class="cp"><dl class="kv kv3">'+campos.map(function(c){return kvi(c[0],c[1])}).join('')+'</dl></div>';
   }
 
   // ----- histórico: sistema novo e sistema antigo mesclados por data (mais recente primeiro)
   var ev=(H.novos||[]).map(function(x){return {em:x.em,por:x.por,t:x.texto}}).concat(((H.tem&&H.historico)||[]).map(function(x){return {em:x.em,por:x.por+(x.auto&&x.auto!==x.por?' ('+x.auto+')':''),t:x.texto,ant:1}}));
-  ev.sort(function(a,b){var x=new Date(String(a.em).replace(' ','T')).getTime()||0,y=new Date(String(b.em).replace(' ','T')).getTime()||0;return y-x});
+  ev.sort(function(a,b){return (quando(b.em).getTime()||0)-(quando(a.em).getTime()||0)});
   var sHist=H.erro?'<div class="cp"><span class="vermelho">'+esc(H.erro)+'</span></div>':(ev.length?'<ul class="hist">'+ev.map(function(x){return '<li><span class="q">'+dtHora(x.em)+'</span><span class="t">'+esc(x.t)+'</span><span class="o">'+esc(x.por||'?')+(x.ant?' · <span class="selo n">sistema antigo</span>':'')+'</span></li>'}).join('')+'</ul>':'<div class="cp"><span class="fraco">Nenhuma alteração registrada.</span></div>');
   sHist+='<div class="cp"><span class="nota">A carga inicial vinda do sistema antigo não aparece como alteração.</span></div>';
 
