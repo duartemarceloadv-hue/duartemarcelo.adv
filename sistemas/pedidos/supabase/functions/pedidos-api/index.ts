@@ -362,7 +362,10 @@ async function aPedido(c: Ctx, b: any) {
   p.itens = itens; p.nf = nf;
   p.arq = arq.map((a) => ({ id: a.id, nome: a.nome, cod: a.categoria, cat: CAT[a.categoria] || a.categoria, subst: a.subst, abre: a.abre, em: a.enviado_em, por: a.enviado_por }));
   p.obsLonga = p.obs;
-  return { hoje: HOJE, lab: LABS[p.lab], pedido: p, pode_gravar: PAPEIS_ESCRITA.includes(c.papel) };
+  const e = escopo(c);
+  const unidades = await sql`select id, nome from pedidos_novo.unidade where ativo and ${e === null ? sql`true` : sql`id = any(${arr(e)}::uuid[])`} order by nome`;
+  p.numLabRaw = p.numLab;
+  return { hoje: HOJE, lab: LABS[p.lab], pedido: p, unidades, pode_gravar: PAPEIS_ESCRITA.includes(c.papel), pode_admin: c.papel === "admin" };
 }
 async function aPagamentos(c: Ctx, b: any) {
   const { HOJE, h7, PED, PARC } = await carregar(c);
@@ -550,6 +553,197 @@ async function aCobrancaBaixa(c: Ctx, b: any) {
   return { textos };
 }
 
+
+// ---------- edição (tudo passa pelo registro de alterações) ----------
+const txt = (v: unknown, max = 500) => (v == null ? null : String(v).trim().slice(0, max) || null);
+const dataOuNull = (v: unknown, campo: string) => (v == null || v === "" ? null : dataValida(v, campo));
+const numero = (v: unknown) => (typeof v === "number" ? v : Number(String(v ?? "").trim().replace(/\./g, "").replace(",", ".")) );
+function traduzErroBanco(e: any): never {
+  if (e?.code === "23505") {
+    if (/num_lab/.test(e.constraint_name || e.message)) throw new Erro(409, "Já existe outro pedido com esse número do laboratório.");
+    if (/parcela/.test(e.constraint_name || e.message)) throw new Erro(409, "Já existe uma parcela com esse número (n/de) neste pedido.");
+    if (/pedido_item/.test(e.constraint_name || e.message)) throw new Erro(409, "O mesmo produto aparece duas vezes. Junte as quantidades numa linha só.");
+    throw new Erro(409, "Registro repetido.");
+  }
+  throw e;
+}
+async function travaPedido(tx: postgres.TransactionSql, c: Ctx, id: string) {
+  const [p] = await tx`select p.*, p.enviado_em::text t_enviado_em, p.expedido_em::text t_expedido_em, p.recebido_em::text t_recebido_em,
+      p.confirmado_lab_em::text t_confirmado_lab_em, p.previsao_envio::text t_previsao_envio, p.frete::float8 t_frete
+    from pedidos_novo.pedido p where p.id = ${id} and ${filtroUn(c, "p.unidade_id")} for update`;
+  if (!p) throw new Erro(404, "Pedido não encontrado (ou fora das suas unidades).", "nao_encontrado");
+  return p;
+}
+async function aEditarPedido(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const id = uuid(b.pedido_id);
+  const d = b.dados && typeof b.dados === "object" ? b.dados : {};
+  const HOJE = await hojeBanco();
+  const upd: Record<string, unknown> = {};
+  if ("num_lab" in d) upd.num_lab = txt(d.num_lab, 40);
+  if ("rastreio" in d) upd.rastreio = txt(d.rastreio, 80);
+  if ("obs" in d) upd.obs = txt(d.obs, 1000);
+  if ("frete" in d) {
+    const f = r2(numero(d.frete ?? 0));
+    if (!isFinite(f) || f < 0) throw new Erro(400, "Frete inválido.");
+    upd.frete = f;
+  }
+  const DATAS: [string, string, boolean][] = [
+    ["enviado_em", "data de envio ao laboratório", false], ["confirmado_lab_em", "data de confirmação do laboratório", false],
+    ["previsao_envio", "previsão de saída do laboratório", true], ["expedido_em", "data de saída do laboratório", false],
+    ["recebido_em", "data de recebimento na unidade", false],
+  ];
+  for (const [k, nome, futuroOk] of DATAS) {
+    if (!(k in d)) continue;
+    const v = dataOuNull(d[k], nome);
+    if (v && !futuroOk && v > HOJE) throw new Erro(400, `A ${nome} não pode ser no futuro.`);
+    upd[k] = v;
+  }
+  if ("unidade_id" in d) {
+    const u = uuid(d.unidade_id, "unidade");
+    const e = escopo(c);
+    if (e !== null && !e.includes(u)) throw new Erro(403, "Você não tem acesso a essa unidade.");
+    const [ok] = await sql`select 1 from pedidos_novo.unidade where id = ${u} and ativo`;
+    if (!ok) throw new Erro(400, "Unidade não encontrada.");
+    upd.unidade_id = u;
+  }
+  try {
+    return await comAuditoria(c, async (tx) => {
+      const p = await travaPedido(tx, c, id);
+      if (p.cancelado_em) throw new Erro(409, "Pedido cancelado não pode ser editado. Reabra o pedido antes.");
+      const m: Record<string, any> = { enviado_em: p.t_enviado_em, expedido_em: p.t_expedido_em, recebido_em: p.t_recebido_em, confirmado_lab_em: p.t_confirmado_lab_em, ...upd };
+      if (m.enviado_em && m.expedido_em && m.expedido_em < m.enviado_em) throw new Erro(400, "A saída do laboratório não pode ser antes do envio do pedido.");
+      if (m.enviado_em && m.confirmado_lab_em && m.confirmado_lab_em < m.enviado_em) throw new Erro(400, "A confirmação do laboratório não pode ser antes do envio do pedido.");
+      if (m.enviado_em && m.recebido_em && m.recebido_em < m.enviado_em) throw new Erro(400, "O recebimento não pode ser antes do envio do pedido.");
+      if (m.expedido_em && m.recebido_em && m.recebido_em < m.expedido_em) throw new Erro(400, "O recebimento não pode ser antes da saída do laboratório.");
+      if ("recebido_em" in upd) upd.recebido_por = upd.recebido_em ? (p.recebido_em ? p.recebido_por : c.email) : null;
+      const atual = (k: string) => ("t_" + k in p ? p["t_" + k] : p[k]);
+      const mudou = Object.keys(upd).filter((k) => k !== "recebido_por" && String(upd[k] ?? "") !== String(atual(k) ?? ""));
+      if (!mudou.length) return { ok: true, mensagem: "Nada foi alterado." };
+      const so: Record<string, unknown> = {};
+      for (const k of mudou) so[k] = upd[k];
+      if ("recebido_em" in so) so.recebido_por = upd.recebido_por;
+      await tx`update pedidos_novo.pedido set ${tx(so)} where id = ${id}`;
+      return { ok: true, mensagem: `Pedido ${p.num_interno || ""} atualizado (${mudou.length} ${mudou.length === 1 ? "campo" : "campos"}).` };
+    });
+  } catch (e) { if (e instanceof Erro) throw e; traduzErroBanco(e); }
+}
+async function aCancelarPedido(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const id = uuid(b.pedido_id);
+  const motivo = txt(b.motivo, 500);
+  if (!motivo || motivo.length < 5) throw new Erro(400, "Escreva o motivo do cancelamento (pelo menos 5 letras).");
+  return await comAuditoria(c, async (tx) => {
+    const p = await travaPedido(tx, c, id);
+    if (p.cancelado_em) throw new Erro(409, "Este pedido já está cancelado.");
+    await tx`update pedidos_novo.pedido set cancelado_em = now(), cancelado_motivo = ${motivo + " — por " + c.email} where id = ${id}`;
+    return { ok: true, mensagem: `Pedido ${p.num_interno || ""} cancelado.` };
+  });
+}
+async function aReabrirPedido(c: Ctx, b: any) {
+  exigeEscrita(c);
+  if (c.papel !== "admin") throw new Erro(403, "Só o administrador pode reabrir um pedido cancelado.");
+  const id = uuid(b.pedido_id);
+  return await comAuditoria(c, async (tx) => {
+    const p = await travaPedido(tx, c, id);
+    if (!p.cancelado_em) throw new Erro(409, "Este pedido não está cancelado.");
+    await tx`update pedidos_novo.pedido set cancelado_em = null, cancelado_motivo = null where id = ${id}`;
+    return { ok: true, mensagem: `Pedido ${p.num_interno || ""} reaberto.` };
+  });
+}
+async function aSalvarParcela(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const x = b.parcela && typeof b.parcela === "object" ? b.parcela : {};
+  const id = x.id ? uuid(x.id, "parcela") : null;
+  const pedidoId = uuid(x.pedido_id ?? b.pedido_id);
+  const n = Math.floor(Number(x.n)), de = Math.floor(Number(x.de));
+  if (!(n >= 1 && de >= 1 && n <= de && de <= 60)) throw new Erro(400, "Número da parcela inválido (ex.: 2 de 5).");
+  const venc = dataValida(x.vencimento, "data de vencimento");
+  const valor = r2(numero(x.valor));
+  if (!isFinite(valor) || valor <= 0) throw new Erro(400, "Informe o valor da parcela (maior que zero).");
+  const forma = String(x.forma || "");
+  if (!FORMAS.includes(forma)) throw new Erro(400, "Escolha a forma (boleto, PIX, cartão ou outra).");
+  const HOJE = await hojeBanco();
+  const bOmie = dataOuNull(x.baixa_omie_em, "data da baixa na Omie");
+  const bPlan = dataOuNull(x.baixa_planilha_em, "data da baixa na planilha");
+  if ((bOmie && bOmie > HOJE) || (bPlan && bPlan > HOJE)) throw new Erro(400, "Data de baixa não pode ser no futuro.");
+  try {
+    return await comAuditoria(c, async (tx) => {
+      const p = await travaPedido(tx, c, pedidoId);
+      if (p.cancelado_em) throw new Erro(409, "Pedido cancelado: não é possível lançar ou alterar parcelas.");
+      const dados = { n, de, vencimento: venc, valor, forma, baixa_omie_em: bOmie, baixa_planilha_em: bPlan };
+      if (id) {
+        const [a] = await tx`select pa.*, coalesce((select sum(valor) from pedidos_novo.pagamento_parcela where parcela_id = pa.id), 0)::float8 pago
+          from pedidos_novo.parcela pa where pa.id = ${id} and pa.pedido_id = ${pedidoId} for update`;
+        if (!a) throw new Erro(404, "Parcela não encontrada.");
+        if (a.cancelada_motivo) throw new Erro(409, "Parcela cancelada não pode ser editada.");
+        if (valor < a.pago - 0.005) throw new Erro(400, `O valor não pode ser menor do que já foi pago com comprovante (${R(a.pago)}).`);
+        await tx`update pedidos_novo.parcela set ${tx(dados)} where id = ${id}`;
+        return { ok: true, mensagem: `Parcela ${n}/${de} atualizada.` };
+      }
+      await tx`insert into pedidos_novo.parcela ${tx({ ...dados, pedido_id: pedidoId, origem: "digitado" })}`;
+      return { ok: true, mensagem: `Parcela ${n}/${de} lançada.` };
+    });
+  } catch (e) { if (e instanceof Erro) throw e; traduzErroBanco(e); }
+}
+async function aCancelarParcela(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const id = uuid(b.parcela_id, "parcela");
+  const motivo = txt(b.motivo, 500);
+  if (!motivo || motivo.length < 5) throw new Erro(400, "Escreva o motivo do cancelamento (pelo menos 5 letras).");
+  return await comAuditoria(c, async (tx) => {
+    const [a] = await tx`select pa.id, pa.n, pa.de, pa.cancelada_motivo, pe.num_interno,
+        (select count(*) from pedidos_novo.pagamento_parcela where parcela_id = pa.id)::int pags
+      from pedidos_novo.parcela pa join pedidos_novo.pedido pe on pe.id = pa.pedido_id
+      where pa.id = ${id} and ${filtroUn(c, "pe.unidade_id")} for update of pa`;
+    if (!a) throw new Erro(404, "Parcela não encontrada.");
+    if (a.cancelada_motivo) throw new Erro(409, "Esta parcela já está cancelada.");
+    if (a.pags) throw new Erro(409, "Esta parcela tem comprovante de pagamento ligado; não pode ser cancelada.");
+    await tx`update pedidos_novo.parcela set cancelada_motivo = ${motivo + " — por " + c.email} where id = ${id}`;
+    return { ok: true, mensagem: `Parcela ${a.n}/${a.de} do pedido ${a.num_interno} cancelada.` };
+  });
+}
+async function aProdutos(c: Ctx, b: any) {
+  const id = uuid(b.pedido_id);
+  const [p] = await sql`select p.laboratorio_id, coalesce(p.enviado_em, pedidos_novo.hoje())::text ref from pedidos_novo.pedido p
+    where p.id = ${id} and ${filtroUn(c, "p.unidade_id")}`;
+  if (!p) throw new Erro(404, "Pedido não encontrado (ou fora das suas unidades).", "nao_encontrado");
+  const produtos = await sql`select pr.id, pr.codigo, pr.descricao,
+      (select pc.valor::float8 from pedidos_novo.preco pc where pc.produto_id = pr.id and pc.de <= ${p.ref}::date order by pc.de desc limit 1) preco
+    from pedidos_novo.produto pr where pr.laboratorio_id = ${p.laboratorio_id} and pr.ativo order by pr.descricao`;
+  const itens = await sql`select produto_id, qtd::float8 qtd, preco_unit::float8 preco from pedidos_novo.pedido_item where pedido_id = ${id}`;
+  return { ref: p.ref, produtos, itens };
+}
+async function aSalvarItens(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const id = uuid(b.pedido_id);
+  const lista = Array.isArray(b.itens) ? b.itens : [];
+  if (lista.length > 50) throw new Erro(400, "No máximo 50 produtos por pedido.");
+  const itens = lista.map((x: any, i: number) => {
+    const pid = uuid(x.produto_id, "produto");
+    const qtd = numero(x.qtd);
+    if (!isFinite(qtd) || qtd <= 0) throw new Erro(400, `Linha ${i + 1}: quantidade inválida.`);
+    const preco = r2(numero(x.preco));
+    if (!isFinite(preco) || preco < 0) throw new Erro(400, `Linha ${i + 1}: preço inválido.`);
+    return { produto_id: pid, qtd, preco_unit: preco };
+  });
+  if (new Set(itens.map((x: any) => x.produto_id)).size !== itens.length) throw new Erro(400, "O mesmo produto aparece duas vezes. Junte as quantidades numa linha só.");
+  try {
+    return await comAuditoria(c, async (tx) => {
+      const p = await travaPedido(tx, c, id);
+      if (p.cancelado_em) throw new Erro(409, "Pedido cancelado: não é possível alterar os itens.");
+      if (itens.length) {
+        const ok = await tx`select count(*)::int n from pedidos_novo.produto where id = any(${arr(itens.map((x: any) => x.produto_id))}::uuid[]) and laboratorio_id = ${p.laboratorio_id}`;
+        if (ok[0].n !== itens.length) throw new Erro(400, "Algum produto não é deste laboratório.");
+      }
+      await tx`delete from pedidos_novo.pedido_item where pedido_id = ${id}`;
+      for (const x of itens) await tx`insert into pedidos_novo.pedido_item ${tx({ ...x, pedido_id: id })}`;
+      const [t] = await tx`select coalesce(sum(total), 0)::float8 sub from pedidos_novo.pedido_item where pedido_id = ${id}`;
+      return { ok: true, mensagem: `Itens do pedido ${p.num_interno || ""} salvos: ${plural(itens.length, "produto", "produtos")}, ${R(t.sub)}.` };
+    });
+  } catch (e) { if (e instanceof Erro) throw e; traduzErroBanco(e); }
+}
+
 async function aBaixarSemComprovante(c: Ctx, b: any) {
   exigeEscrita(c);
   const ids: string[] = Array.isArray(b.parcela_ids) ? [...new Set(b.parcela_ids.map((x: unknown) => uuid(x, "parcela")))] as string[] : [];
@@ -632,6 +826,8 @@ Deno.serve(async (req) => {
       inicio: aInicio, pedidos: aPedidos, pedido: aPedido, pagamentos: aPagamentos,
       confirmar_recebimento: aConfirmarRecebimento, anexar_comprovante: aAnexarComprovante,
       cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo, baixar_sem_comprovante: aBaixarSemComprovante,
+      editar_pedido: aEditarPedido, cancelar_pedido: aCancelarPedido, reabrir_pedido: aReabrirPedido,
+      salvar_parcela: aSalvarParcela, cancelar_parcela: aCancelarParcela, produtos: aProdutos, salvar_itens: aSalvarItens,
     };
     const f = acoes[acao];
     if (!f) throw new Erro(400, "Ação desconhecida.");

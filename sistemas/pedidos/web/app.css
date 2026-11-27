@@ -296,3 +296,11 @@ table.tp .sub2{white-space:nowrap}
 .ok{color:var(--green);font-weight:700}
 .nao{color:var(--red);font-weight:700}
 .parc .a{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+.link.perigo{color:var(--red)}
+.sec h4 small .link{font-size:12.5px}
+.itens-ed .ent{padding:6px 8px}
+.itens-ed td{vertical-align:middle}
+.dlg-corpo .erro{margin-top:8px}
+.dlg.larga{width:min(900px,100%)}
+.itens-ed select.ent{min-width:220px}

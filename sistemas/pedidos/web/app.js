@@ -397,7 +397,8 @@ function ficha(d){
   var porId={}; p.arq.forEach(function(a){porId[a.id]=a});
   var colA='', colB='';
   // Itens
-  colA+='<div class="sec"><h4>Itens <small>'+plural(p.itens.length,'produto','produtos')+'</small></h4>';
+  var ed=pode&&!canc;
+  colA+='<div class="sec"><h4>Itens <small>'+plural(p.itens.length,'produto','produtos')+(ed?' <button type="button" class="link" id="ed-itens">'+(p.itens.length?'editar itens':'completar itens')+'</button>':'')+'</small></h4>';
   if(p.itens.length){
     colA+='<table class="t"><thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>'+
      p.itens.map(function(it){return '<tr><td>'+esc(it.prod)+'</td><td class="r">'+Number(it.qtd).toLocaleString('pt-BR')+'</td><td class="r">'+R(it.preco)+'</td><td class="r">'+R(it.total)+'</td></tr>'}).join('')+
@@ -408,7 +409,8 @@ function ficha(d){
   var docs=arqPor(['pedido_venda','espelho','receita','termo']);
   colA+='<div class="sec"><h4>Pedido e receita <small>'+plural(docs.length,'arquivo','arquivos')+'</small></h4>'+(docs.length?arqLista(docs):'<div class="fraco">Nenhum pedido de venda, espelho ou receita anexado.</div>')+'</div>';
   // Dados
-  colA+='<div class="sec"><h4>Dados do pedido</h4><dl class="kv"><dt>Nº interno</dt><dd>'+esc(p.num)+'</dd><dt>'+esc(lab.numNome)+'</dt><dd>'+esc(p.numLab||'—')+'</dd><dt>Laboratório</dt><dd>'+esc(lab.nomeLongo)+'</dd><dt>Condição padrão</dt><dd>'+esc(lab.cond)+'</dd>'+
+  colA+='<div class="sec"><h4>Dados do pedido <small>'+(ed?'<button type="button" class="link" id="ed-pedido">editar dados</button> · <button type="button" class="link perigo" id="canc-pedido">cancelar pedido</button>':'')+(canc&&d.pode_admin?'<button type="button" class="link" id="reabrir-pedido">reabrir pedido</button>':'')+'</small></h4><dl class="kv"><dt>Nº interno</dt><dd>'+esc(p.num)+'</dd><dt>'+esc(lab.numNome)+'</dt><dd>'+esc(p.numLab||'—')+'</dd><dt>Laboratório</dt><dd>'+esc(lab.nomeLongo)+'</dd><dt>Condição padrão</dt><dd>'+esc(lab.cond)+'</dd>'+
+   '<dt>Enviado ao laboratório</dt><dd>'+dt(p.env)+'</dd>'+(p.conf?'<dt>Confirmado pelo lab.</dt><dd>'+dt(p.conf)+'</dd>':'')+(p.prev?'<dt>Previsão de saída</dt><dd>'+dt(p.prev)+'</dd>':'')+(p.exp?'<dt>Saiu do laboratório</dt><dd>'+dt(p.exp)+'</dd>':'')+(p.rec?'<dt>Recebido na unidade</dt><dd>'+dt(p.rec)+'</dd>':'')+'<dt>Frete</dt><dd>'+R(p.frete)+'</dd>'+
    (p.rast?'<dt>Rastreio</dt><dd>'+esc(p.rast)+'</dd>':'')+
    (p.tipo?'<dt>Tipo</dt><dd>'+(p.tipo==='mae'?'Pedido mãe':'Remessa de pedido mãe')+'</dd>':'')+
    (p.obs?'<dt>Observação</dt><dd>'+esc(p.obs)+'</dd>':'')+
@@ -416,7 +418,7 @@ function ficha(d){
    '</dl><div class="origem">Origem: '+(p.leg?'migrado do sistema antigo (referência '+esc(p.leg)+')':'lançado no sistema novo')+'.</div></div>';
   // Parcelas e boletos
   var boletosLivres=arqPor(['boleto']).filter(function(a){return !p.parc.some(function(x){return x.boleto===a.id})});
-  colB+='<div class="sec"><h4>Parcelas e boletos <small>'+R(p.parc.reduce(function(t,x){return t+x.valor},0))+' cobrados pelo laboratório</small></h4>';
+  colB+='<div class="sec"><h4>Parcelas e boletos <small>'+R(p.parc.reduce(function(t,x){return t+x.valor},0))+' cobrados pelo laboratório'+(ed?' · <button type="button" class="link" id="nova-parc">+ lançar parcela</button>':'')+'</small></h4>';
   if(!p.parc.length) colB+='<div class="fraco">Nenhuma parcela cadastrada.</div>';
   p.parc.forEach(function(x){
     var s=SIT_PC[x.sit]||SIT_PC.A;
@@ -433,7 +435,7 @@ function ficha(d){
      tres+(x.cancMot?'<div class="d">'+esc(x.cancMot)+'</div>':'')+(x.bSisObs?'<div class="d">Obs. da baixa: '+esc(x.bSisObs)+'</div>':'')+
      '<div class="d">Boleto: '+(bol?esc(bol.nome)+' '+lnk(bol,'abrir'):(x.forma==='boleto'?'<span class="fraco">não ligado a esta parcela'+(boletosLivres.length?' (veja os boletos do pedido abaixo)':'')+'</span>':'<span class="fraco">não se aplica</span>'))+'</div>'+
      '<div class="d">Comprovante: '+((x.pagamentos||[]).length?x.pagamentos.map(function(g){var a=porId[g.arquivo_id];if(a)usados[a.id]=1;return R(g.valor)+' em '+dt(g.pago_em)+' ('+esc(FORMA[g.forma]||g.forma)+') '+(g.abre?'<button type="button" class="link" data-abrir="'+esc(g.arquivo_id)+'">abrir</button>':'<span class="fraco">(no sistema antigo)</span>')}).join(' · '):(x.bSis?'<span class="fraco">baixa sem comprovante (Omie conferida)</span>':'<span class="fraco">nenhum</span>'))+'</div>'+
-     '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','t-blue']:s)+btn+'</div></div>';
+     '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','t-blue']:s)+btn+'</div>'+(ed&&x.sit!=='X'?'<div class="d"><button type="button" class="link" data-ed-parc="'+esc(x.id)+'">editar parcela</button> · <button type="button" class="link perigo" data-canc-parc="'+esc(x.id)+'">cancelar parcela</button></div>':'')+'</div>';
   });
   if(p.parc.length){var origs={};p.parc.forEach(function(x){origs[x.orig]=1});colB+='<div class="origem">Origem das parcelas: '+esc(Object.keys(origs).join('; '))+'. A parcela só finaliza com as 3 baixas: Omie, planilha do laboratório e nosso sistema.</div>'}
   if(boletosLivres.length) colB+='<div class="sub-sec"><b>Boletos do pedido</b> <span class="fraco">(vieram do sistema antigo sem indicação da parcela)</span>'+arqLista(boletosLivres)+'</div>';
@@ -503,6 +505,95 @@ function abrirDlg(titulo,corpo){
   d.classList.add('on'); var f=$('.dlg input:not([type=checkbox]),.dlg textarea,.dlg button.botao',d); (f||$('#dlg-fechar')).focus();
 }
 function fecharDlg(){var d=$('#dlg');if(!d.classList.contains('on'))return;d.classList.remove('on');d.innerHTML='';if(dlgFoco&&dlgFoco.focus)dlgFoco.focus()}
+
+
+/* ---------- edição ---------- */
+function campoD(rot,html,dica){return '<label class="campo"><span>'+esc(rot)+(dica?' <small>('+esc(dica)+')</small>':'')+'</span>'+html+'</label>'}
+function inData(id,v,max){return '<input class="ent" type="date" id="'+id+'" value="'+esc(v||'')+'"'+(max?' max="'+max+'"':'')+'>'}
+function erroDlg(x){var e=$('#dlg-erro');if(e)e.innerHTML='<div class="erro">'+esc(x.message||x)+'</div>'}
+function rodapeDlg(txt){return '<div id="dlg-erro"></div></div><div class="dlg-pe"><button type="button" class="botao sec" id="dlg-cancela">Cancelar</button><button type="submit" class="botao">'+esc(txt)+'</button></div></form>'}
+async function gravarDlg(form,acao,dados,okTxt){
+  var bt=$('#'+form+' button[type=submit]'),t=bt.textContent;bt.disabled=true;bt.textContent='Gravando…';
+  try{var r=await api(acao,dados);fecharDlg();avisar(r.mensagem||okTxt);aposGravar()}
+  catch(x){bt.disabled=false;bt.textContent=t;erroDlg(x)}
+}
+function abrirEditarPedido(){
+  var d=fichaAtual,p=d.pedido,h=d.hoje||HOJE;
+  var html='<form id="f-edped" novalidate><div class="dlg-corpo"><p class="fraco" style="margin:0 0 10px">Tudo o que for alterado fica no registro de alterações, com seu e-mail.</p>'+
+   '<div class="duas">'+campoD(d.lab.numNome,'<input class="ent" id="e-numlab" maxlength="40" value="'+esc(p.numLab||'')+'">')+
+   campoD('Unidade','<select class="ent" id="e-un">'+d.unidades.map(function(u){return '<option value="'+esc(u.id)+'"'+(u.id===p.unidade_id?' selected':'')+'>'+esc(u.nome)+'</option>'}).join('')+'</select>')+'</div>'+
+   '<div class="duas">'+campoD('Enviado ao laboratório',inData('e-env',p.env,h))+campoD('Confirmado pelo laboratório',inData('e-conf',p.conf,h),'opcional')+'</div>'+
+   '<div class="duas">'+campoD('Previsão de saída do laboratório',inData('e-prev',p.prev),'opcional')+campoD('Saiu do laboratório',inData('e-exp',p.exp,h),'opcional')+'</div>'+
+   '<div class="duas">'+campoD('Recebido na unidade',inData('e-rec',p.rec,h),'opcional')+campoD('Rastreio','<input class="ent" id="e-rast" maxlength="80" value="'+esc(p.rast||'')+'">','opcional')+'</div>'+
+   '<div class="duas">'+campoD('Frete (R$)','<input class="ent num" id="e-frete" inputmode="decimal" value="'+esc(valBR(p.frete||0))+'">')+'<span></span></div>'+
+   campoD('Observação','<textarea class="ent" id="e-obs" maxlength="1000">'+esc(p.obs||'')+'</textarea>','opcional')+rodapeDlg('Salvar alterações');
+  abrirDlg('Editar dados do pedido '+p.num,html);
+}
+function enviarEditarPedido(e){
+  e.preventDefault();
+  var fr=numBR($('#e-frete').value);if(isNaN(fr)){erroDlg('Frete inválido.');return}
+  gravarDlg('f-edped','editar_pedido',{pedido_id:fichaAtual.pedido.id,dados:{num_lab:$('#e-numlab').value,unidade_id:$('#e-un').value,enviado_em:$('#e-env').value,confirmado_lab_em:$('#e-conf').value,previsao_envio:$('#e-prev').value,expedido_em:$('#e-exp').value,recebido_em:$('#e-rec').value,rastreio:$('#e-rast').value,frete:fr,obs:$('#e-obs').value}},'Pedido atualizado.');
+}
+var cancAlvo=null;
+function abrirCancelar(tipo,id,titulo,aviso){
+  cancAlvo={tipo:tipo,id:id};
+  abrirDlg(titulo,'<form id="f-canc" novalidate><div class="dlg-corpo"><p style="margin:0 0 10px">'+esc(aviso)+'</p>'+campoD('Motivo','<textarea class="ent" id="c-mot" maxlength="500" placeholder="Ex.: pedido duplicado; o laboratório cancelou por e-mail em 22/07"></textarea>')+rodapeDlg('Confirmar cancelamento'));
+}
+function enviarCancelar(e){
+  e.preventDefault();var m=$('#c-mot').value.trim();if(m.length<5){erroDlg('Escreva o motivo (pelo menos 5 letras).');return}
+  if(cancAlvo.tipo==='pedido')gravarDlg('f-canc','cancelar_pedido',{pedido_id:cancAlvo.id,motivo:m},'Pedido cancelado.');
+  else gravarDlg('f-canc','cancelar_parcela',{parcela_id:cancAlvo.id,motivo:m},'Parcela cancelada.');
+}
+var parcAlvo=null;
+function abrirParcela(id){
+  var p=fichaAtual.pedido,h=fichaAtual.hoje||HOJE,x=id?p.parc.filter(function(y){return y.id===id})[0]:null;
+  var ult=p.parc.filter(function(y){return y.sit!=='X'});
+  parcAlvo=id||null;
+  var de=x?x.de:(ult.length?ult[0].de:1), n=x?x.n:Math.min(de,ult.length+1);
+  var html='<form id="f-parc" novalidate><div class="dlg-corpo">'+
+   '<div class="duas">'+campoD('Parcela nº','<input class="ent num" id="p-n" inputmode="numeric" value="'+n+'">')+campoD('de (total de parcelas)','<input class="ent num" id="p-de" inputmode="numeric" value="'+de+'">')+'</div>'+
+   '<div class="duas">'+campoD('Vencimento',inData('p-venc',x?x.venc:''))+campoD('Valor (R$)','<input class="ent num" id="p-valor" inputmode="decimal" value="'+(x?esc(valBR(x.valor)):'')+'">')+'</div>'+
+   '<div class="duas">'+campoD('Forma','<select class="ent" id="p-forma">'+FORMAS_OK.map(function(f){return '<option value="'+f+'"'+(x&&x.forma===f||(!x&&f==='boleto')?' selected':'')+'>'+FORMA[f]+'</option>'}).join('')+'</select>')+'<span></span></div>'+
+   '<div class="duas">'+campoD('Baixa na Omie',inData('p-omie',x?x.bOmie:'',h),'opcional; o robô da Omie preenche')+campoD('Baixa na planilha',inData('p-plan',x?x.bPlan:'',h),'opcional; só 1ª parcela')+'</div>'+
+   rodapeDlg(x?'Salvar parcela':'Lançar parcela');
+  abrirDlg(x?('Editar parcela '+x.n+'/'+x.de+' — '+p.num):('Lançar parcela — '+p.num),html);
+}
+function enviarParcela(e){
+  e.preventDefault();
+  var v=numBR($('#p-valor').value);if(isNaN(v)||v<=0){erroDlg('Informe o valor da parcela.');return}
+  if(!$('#p-venc').value){erroDlg('Informe o vencimento.');return}
+  gravarDlg('f-parc','salvar_parcela',{pedido_id:fichaAtual.pedido.id,parcela:{id:parcAlvo,pedido_id:fichaAtual.pedido.id,n:$('#p-n').value,de:$('#p-de').value,vencimento:$('#p-venc').value,valor:v,forma:$('#p-forma').value,baixa_omie_em:$('#p-omie').value,baixa_planilha_em:$('#p-plan').value}},'Parcela salva.');
+}
+var itensCat=null;
+async function abrirItens(){
+  var p=fichaAtual.pedido;
+  abrirDlg('Itens do pedido '+p.num,'<div class="dlg-corpo"><p class="vazio">Carregando produtos e preços…</p></div>');
+  try{itensCat=await api('produtos',{pedido_id:p.id})}catch(x){$('#dlg .dlg-corpo').innerHTML='<div class="erro">'+esc(x.message)+'</div>';return}
+  var linhas=itensCat.itens.length?itensCat.itens:[{produto_id:'',qtd:'',preco:''}];
+  var html='<form id="f-itens" novalidate><div class="dlg-corpo"><p class="fraco" style="margin:0 0 10px">O preço vem da tabela vigente em '+dt(itensCat.ref)+' (data do envio). Se o laboratório cobrou outro valor, altere o preço — a diferença aparece na conferência de cobrança.</p>'+
+   '<table class="t itens-ed"><thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Preço un.</th><th class="r">Total</th><th></th></tr></thead><tbody id="it-corpo">'+linhas.map(linhaItem).join('')+'</tbody>'+
+   '<tfoot><tr><td><button type="button" class="link" id="it-mais">+ adicionar produto</button></td><td></td><td class="r">Produtos</td><td class="r" id="it-tot">—</td><td></td></tr></tfoot></table>'+rodapeDlg('Salvar itens');
+  abrirDlg('Itens do pedido '+p.num,html);$('#dlg .dlg').classList.add('larga');
+  totalItens();
+}
+function linhaItem(it){
+  var ops='<option value="">— escolha —</option>'+itensCat.produtos.map(function(pr){return '<option value="'+esc(pr.id)+'" data-preco="'+(pr.preco==null?'':pr.preco)+'"'+(pr.id===it.produto_id?' selected':'')+'>'+esc(pr.descricao)+'</option>'}).join('');
+  return '<tr class="it-l"><td><select class="ent it-prod">'+ops+'</select></td><td><input class="ent num it-qtd" inputmode="decimal" value="'+esc(it.qtd===''?'':String(it.qtd).replace('.',','))+'" style="width:80px"></td>'+
+    '<td><input class="ent num it-preco" inputmode="decimal" value="'+esc(it.preco===''||it.preco==null?'':valBR(it.preco))+'" style="width:100px"></td><td class="r it-total">—</td><td><button type="button" class="link perigo it-rem" aria-label="Remover linha">×</button></td></tr>';
+}
+function totalItens(){
+  var t=0;document.querySelectorAll('#it-corpo .it-l').forEach(function(tr){var q=numBR(tr.querySelector('.it-qtd').value),pr=numBR(tr.querySelector('.it-preco').value),v=(isNaN(q)||isNaN(pr))?0:r2(q*pr);tr.querySelector('.it-total').textContent=v?R(v):'—';t+=v});
+  var e=$('#it-tot');if(e)e.textContent=R(t);
+}
+function enviarItens(e){
+  e.preventDefault();var itens=[],erro='';
+  document.querySelectorAll('#it-corpo .it-l').forEach(function(tr,i){var pid=tr.querySelector('.it-prod').value,q=numBR(tr.querySelector('.it-qtd').value),pr=numBR(tr.querySelector('.it-preco').value);
+    if(!pid&&!tr.querySelector('.it-qtd').value)return;
+    if(!pid)erro=erro||('Linha '+(i+1)+': escolha o produto.');else if(isNaN(q)||q<=0)erro=erro||('Linha '+(i+1)+': quantidade inválida.');else if(isNaN(pr)||pr<0)erro=erro||('Linha '+(i+1)+': preço inválido.');
+    itens.push({produto_id:pid,qtd:q,preco:pr})});
+  if(erro){erroDlg(erro);return}
+  gravarDlg('f-itens','salvar_itens',{pedido_id:fichaAtual.pedido.id,itens:itens},'Itens salvos.');
+}
 
 /* anexar comprovante: lista = parcelas que podem entrar; marcadas = já escolhidas */
 var anexo=null;
@@ -647,6 +738,15 @@ document.addEventListener('click',function(e){
   }
   if(b.dataset.baixaParc){var pp=fichaAtual.pedido,xx=pp.parc.filter(function(y){return y.id===b.dataset.baixaParc})[0];abrirBaixa([{id:xx.id,num:pp.num,un:pp.un,n:xx.n,de:xx.de,valor:xx.valor,bOmie:xx.bOmie}]);return}
   if(b.id==='baixa-sel'){abrirBaixa(selecionadas());return}
+  if(b.id==='ed-pedido'){abrirEditarPedido();return}
+  if(b.id==='canc-pedido'){abrirCancelar('pedido',fichaAtual.pedido.id,'Cancelar pedido '+fichaAtual.pedido.num,'O pedido continua no sistema, marcado como cancelado, com o motivo. Só o administrador pode reabrir.');return}
+  if(b.id==='reabrir-pedido'){if(confirm('Reabrir o pedido '+fichaAtual.pedido.num+'?')){api('reabrir_pedido',{pedido_id:fichaAtual.pedido.id}).then(function(r){avisar(r.mensagem);aposGravar()}).catch(function(x){avisar(x.message)})}return}
+  if(b.id==='nova-parc'){abrirParcela(null);return}
+  if(b.dataset.edParc){abrirParcela(b.dataset.edParc);return}
+  if(b.dataset.cancParc){var xp=fichaAtual.pedido.parc.filter(function(y){return y.id===b.dataset.cancParc})[0];abrirCancelar('parcela',xp.id,'Cancelar parcela '+xp.n+'/'+xp.de+' — '+fichaAtual.pedido.num,'A parcela continua no sistema, marcada como cancelada, e deixa de ser cobrada. Parcela com comprovante ligado não pode ser cancelada.');return}
+  if(b.id==='ed-itens'){abrirItens();return}
+  if(b.id==='it-mais'){$('#it-corpo').insertAdjacentHTML('beforeend',linhaItem({produto_id:'',qtd:'',preco:''}));return}
+  if(b.classList.contains('it-rem')){b.closest('tr').remove();totalItens();return}
   if(b.id==='anexar-sel'){var sl=selecionadas();abrirAnexar(sl,sl.map(function(x){return x.id}),'Parcelas marcadas na tela Pagamentos.');return}
   if(b.id==='limpar-sel'){estado.sel={};render();return}
   if(b.dataset.ir){estado.especial='';estado.grupo='';ir(b.dataset.ir);return}
@@ -676,10 +776,11 @@ $('#dlg').addEventListener('click',function(e){if(e.target.id==='dlg')fecharDlg(
 document.addEventListener('submit',function(e){
   var id=e.target.id;
   if(id==='f-login')entrar(e); else if(id==='f-senha')salvarSenha(e); else if(id==='f-mfa')confirmarMfa(e);
-  else if(id==='f-receber')enviarReceber(e); else if(id==='f-baixa')enviarBaixa(e); else if(id==='f-anexo')enviarAnexo(e);
+  else if(id==='f-receber')enviarReceber(e); else if(id==='f-baixa')enviarBaixa(e); else if(id==='f-edped')enviarEditarPedido(e); else if(id==='f-canc')enviarCancelar(e); else if(id==='f-parc')enviarParcela(e); else if(id==='f-itens')enviarItens(e); else if(id==='f-anexo')enviarAnexo(e);
 });
 var tBuscaG;
 document.addEventListener('input',function(e){
+  if(e.target.classList&&(e.target.classList.contains('it-qtd')||e.target.classList.contains('it-preco'))){totalItens();return}
   if(e.target.id==='g-busca'){estado.gBusca=e.target.value;clearTimeout(tBuscaG);tBuscaG=setTimeout(function(){var pos=e.target.selectionStart;render();var n=$('#g-busca');if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}},250);return}
   if(e.target.id==='busca'){estado.busca=e.target.value;clearTimeout(tBusca);tBusca=setTimeout(function(){
     var pos=e.target.selectionStart;cache.pedidos=null;carregarPedidos().then(function(){var n=$('#busca');if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}})},300)}
@@ -687,6 +788,7 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.id==='unid'){estado.unid=t.value;render();return}
+  if(t.classList&&t.classList.contains('it-prod')){var o=t.selectedOptions[0],pi=t.closest('tr').querySelector('.it-preco');if(o&&o.dataset.preco!==''&&o.dataset.preco!=null)pi.value=valBR(Number(o.dataset.preco));totalItens();return}
   if(t.dataset.pf){estado[t.dataset.pf]=t.value;cache.pedidos=null;render();carregarPedidos();return}
   if(t.dataset.gf){estado[t.dataset.gf]=t.value;render();return}
 });

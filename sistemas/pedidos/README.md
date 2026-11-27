@@ -54,4 +54,8 @@ quem é administrador ou financeiro cadastra um aplicativo autenticador (código
 - *Gerar cobrança de baixa*: só monta o texto para copiar e mandar ao laboratório; não envia nada.
 
 Ações da API (POST com `acao`): `sessao`, `trocar_senha`, `inicio`, `pedidos`, `pedido`, `pagamentos`,
-`confirmar_recebimento`, `anexar_comprovante`, `baixar_sem_comprovante`, `cobranca_baixa`, `abrir_arquivo`.
+`confirmar_recebimento`, `anexar_comprovante`, `baixar_sem_comprovante`, `cobranca_baixa`, `abrir_arquivo`,
+`editar_pedido`, `cancelar_pedido`, `reabrir_pedido` (só admin), `salvar_parcela`, `cancelar_parcela`, `produtos`, `salvar_itens`.
+
+**Edição (27/11/2026):** dados do pedido, cancelamento com motivo (nada é apagado), parcelas (lançar, corrigir, cancelar;
+parcela com comprovante não pode ser cancelada nem ficar menor que o pago) e itens (preço sugerido pela tabela vigente na data do envio).
