@@ -84,7 +84,11 @@ function ficha(d){
   if(pode&&r.status==='rascunho'&&(D.eu()||{}).todas!==false) acs+='<button type="button" class="btn" id="rec-recalc">Recalcular só esta unidade</button>';
   if(pode&&r.status==='rascunho') acs+='<button type="button" class="btn pri" id="rec-st" data-para="gerada">Marcar como gerada</button>';
   if(pode&&r.status==='gerada') acs+='<button type="button" class="btn pri" id="rec-st" data-para="enviada_rt">Marcar como enviada ao RT</button>';
-  acs+='<button type="button" class="btn" id="rec-pedido" aria-disabled="true" title="Fica para a próxima etapa">Criar pedido <span class="selo n">em breve</span></button>';
+  // pedido a partir da receita: só depois de gerada (assinada pelo RT do termo); os itens vêm do saldo da receita
+  if(D.podeCriar&&D.podeCriar()){
+    var pronta=r.status==='gerada'||r.status==='enviada_rt';
+    acs+=pronta?'<button type="button" class="btn" id="rec-pedido">Criar pedido</button>':'<button type="button" class="btn" id="rec-pedido" aria-disabled="true" title="Marque a receita como gerada antes de criar o pedido">Criar pedido</button>';
+  }
   var se=r.status_em||{}, datas=['rascunho','gerada','enviada_rt'].filter(function(k){return se[k]}).map(function(k){return ST[k][0]+' '+D.dt(se[k])}).join(' · ');
   var quem=r.prescritor?esc(r.prescritor):(d.rt_termo?'<span class="fraco">ainda não definido — ao gerar, assina o RT do termo</span>':'<span class="nao">sem termo com o laboratório</span>');
   h+='<section class="fcab"><div class="l1"><h1>Receita de '+esc(nomeMes(r.mes))+'</h1>'+D.tag(ST[r.status]||[r.status,'n'])+'<div class="ac">'+acs+'</div></div>'+
@@ -119,6 +123,8 @@ function ficha(d){
   if(r.legado_ref) sHist+='<div class="cp"><span class="nota">A carga vinda do sistema antigo não aparece como alteração.</span></div>';
   h+=D.secao('rec-itens','Produtos',D.plural(it.filter(function(x){return x.qtd>0}).length,'produto','produtos'),'',sIt);
   h+=D.secao('rec-calc','Cálculo','','',sCalc);
+  var pds=d.pedidos||[];
+  if(pds.length) h+=D.secao('rec-pedidos','Pedidos desta receita',D.plural(pds.length,'pedido','pedidos'),'','<ul class="arqs">'+pds.map(function(p){return '<li><span class="nm"><button type="button" class="link" data-p="'+esc(p.id)+'"'+(p.rascunho&&!p.cancelado?' data-rasc="1"':'')+'>'+esc(p.num||'Rascunho')+'</button></span><span class="mt">'+(p.cancelado?'cancelado':(p.rascunho?'rascunho, ainda não enviado':'enviado em '+D.dt(p.enviado_em)))+'</span></li>'}).join('')+'</ul>');
   if(sAnt) h+=D.secao('rec-antigo','Do sistema antigo','somente leitura','',sAnt);
   h+=D.secao('rec-hist','Histórico',D.plural(ev.length,'registro','registros'),'',sHist);
   return h;
@@ -254,7 +260,12 @@ M.cliques.push(function(b){
   if(b.id==='t-limpar'){est.tLab='';est.tReg='';$('#tela').innerHTML=telaTermos();return true}
   if(b.id==='rec-recalc'){var rc=est.ficha.receita;abrirGerar({mes:rc.mes,unidades:[rc.unidade_id],receitaId:rc.id});return true}
   if(b.id==='rec-ajustar'){abrirAjustar();return true}
-  if(b.id==='rec-pedido'){D.avisar('Criar pedido a partir da receita fica para a próxima etapa.');return true}
+  if(b.id==='rec-pedido'){
+    var rc=est.ficha.receita;
+    if(b.getAttribute('aria-disabled')==='true'){D.avisar('A receita ainda está em rascunho: marque como gerada (assinada pelo RT do termo) antes de criar o pedido.');return true}
+    b.disabled=true;
+    D.api('np_criar',{unidade_id:rc.unidade_id,laboratorio_id:rc.lab,receita_id:rc.id}).then(function(x){D.avisar(x.mensagem);D.abrirRascunho(x.pedido_id)}).catch(function(x){b.disabled=false;D.avisar(x.message)});
+    return true}
   if(b.id==='rec-st'){var para=b.dataset.para,txt=para==='gerada'?'Marcar a receita como gerada?':'Marcar como enviada ao RT? (o sistema não envia e-mail: só registra a data)';
     if(!confirm(txt))return true;
     b.disabled=true;D.api('receita_status',{receita_id:est.ficha.receita.id,para:para}).then(function(r){D.avisar(r.mensagem);abrirFicha(est.ficha.receita.id,true)}).catch(function(x){b.disabled=false;D.avisar(x.message)});return true}

@@ -1,5 +1,6 @@
 // =====================================================================
 // pedidos-api — API do Sistema de Pedidos Dr. Hair (novo), ambiente de teste
+// v9 (27/11/2026): criar pedido (novopedido.ts), fila Notas e PV (notas.ts), justificativa nas correções.
 // verify_jwt = true: só entra quem tem sessão do Supabase Auth.
 // Lê e grava na área pedidos_novo e no núcleo (cadastros comuns: nucleo.*), por ligação direta ao banco,
 // e no bucket privado 'pedidos-novo' (chave de serviço, nunca exposta ao navegador).
@@ -11,6 +12,8 @@ import postgres from "npm:postgres@3.4.4";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { acoesCadastros } from "./cadastros.ts";
 import { acoesReceitas } from "./receitas.ts";
+import { acoesNovoPedido } from "./novopedido.ts";
+import { acoesNotas, resumoNotas } from "./notas.ts";
 
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 3, idle_timeout: 20 });
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -167,7 +170,8 @@ async function carregar(c: Ctx, pedidoId?: string) {
       p.enviado_em::text env, p.previsao_envio::text prev, p.confirmado_lab_em::text conf, p.expedido_em::text exp,
       p.rastreio rast, p.recebido_em::text rec, p.recebido_por, p.recebido_obs rec_obs, p.frete::float8 frete,
       p.subtotal::float8 sub, p.total::float8 total, p.situacao, p.dias_atraso::int atraso, p.cancelado_motivo canc_mot,
-      p.obs, p.legado_ref leg, p.tipo, p.origem, e.etapa, e.previsao::text etapa_prev
+      p.obs, p.legado_ref leg, p.tipo, p.origem, e.etapa, e.previsao::text etapa_prev,
+      (select x.teste from pedidos_novo.pedido x where x.id = p.id) teste
     from pedidos_novo.v_pedido p
     join pedidos_novo.unidade u on u.id = p.unidade_id
     left join lateral (select etapa, previsao from pedidos_novo.etapa_lab x where x.pedido_id = p.id order by em desc, id desc limit 1) e on true
@@ -190,7 +194,7 @@ async function carregar(c: Ctx, pedidoId?: string) {
       id: a.id, num: a.num || "(rascunho)", numLab: a.num_lab, lab: a.lab, labNome: lab?.nome || a.lab, unidade_id: a.unidade_id, un: a.un,
       env: a.env, prev: a.prev, conf: a.conf, exp: a.exp, rast: a.rast, rec: a.rec, recPor: a.recebido_por, recObs: a.rec_obs,
       frete: a.frete, sub: a.sub, total: a.total, sit: SIT_P[a.situacao] || "E", atraso: a.atraso || 0, cancMot: a.canc_mot,
-      obs: a.obs, leg: a.leg, tipo: a.tipo === "normal" ? null : a.tipo, origem: a.origem, etapa: a.etapa, etapaPrev: a.etapa_prev, parc: [] as Parc[],
+      obs: a.obs, leg: a.leg, tipo: a.tipo === "normal" ? null : a.tipo, origem: a.origem, etapa: a.etapa, etapaPrev: a.etapa_prev, parc: [] as Parc[], teste: !!a.teste,
     };
     porId[o.id] = o;
     return o;
@@ -222,6 +226,10 @@ async function carregar(c: Ctx, pedidoId?: string) {
 function acoesDo(p: Ped) {
   const a: { peso: number; cor: string; txt: string }[] = [];
   if (p.sit === "X") return a;
+  if (p.sit === "D") {
+    a.push({ peso: 30, cor: "--blue", txt: p.sub === 0 ? "Completar o rascunho — incluir os produtos" : "Confirmar o envio — pedido ainda em rascunho" });
+    return a;
+  }
   const cnt = (s: string) => {
     const l = p.parc.filter((x: Parc) => x.sit === s);
     return { n: l.length, v: l.reduce((t: number, x: Parc) => t + x.valor, 0) };
@@ -246,7 +254,7 @@ function acoesDo(p: Ped) {
 const FILTRO: Record<string, (p: Ped) => boolean> = {
   atraso: (p) => p.atraso > 0 && p.sit !== "R" && p.sit !== "X",
   caminho: (p) => p.diasCaminho > 7,
-  semitens: (p) => p.sub === 0 && p.sit !== "X",
+  semitens: (p) => p.sub === 0 && p.sit !== "X" && p.sit !== "D",
   labEnviou: (p) => p.labDizEnviou,
 };
 
@@ -261,10 +269,12 @@ async function aInicio(c: Ctx, b: any) {
   const soma = (l: any[], f: (x: any) => number) => r2(l.reduce((t, x) => t + f(x), 0));
   const pc = (f: (x: Parc) => boolean) => { const l = PARC.filter(f); return { n: l.length, v: soma(l, (x) => x.valor) }; };
   const pd = (f: (x: Ped) => boolean) => { const l = PED.filter(f); return { n: l.length, v: soma(l, (x) => x.total) }; };
-  const ab = PED.filter((p) => p.sit !== "R" && p.sit !== "X");
+  const ab = PED.filter((p) => p.sit !== "R" && p.sit !== "X" && p.sit !== "D");
+  const nt = await resumoNotas(sql, c, escopo(c), un);
   return {
     hoje: HOJE, h7,
     cartoes: {
+      nfDiv: nt.nfDiv, pvDiv: nt.pvDiv, labDiv: nt.labDiv, rasc: pd((p) => p.sit === "D"),
       B: pc((x) => x.sit === "B"), P: pc((x) => x.sit === "P"), N: pc((x) => x.sit === "N"), V: pc((x) => x.sit === "V"), A7: pc((x) => x.prox7),
       atraso: pd(FILTRO.atraso), caminho: pd(FILTRO.caminho), semitens: pd(FILTRO.semitens), labEnviou: pd(FILTRO.labEnviou),
     },
@@ -281,7 +291,7 @@ const linhaPedido = (p: Ped, nfs: Record<string, string[]>) => {
   return {
     id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id,
     env: p.env, prazo: p.prazo, exp: p.exp, rec: p.rec, rast: p.rast, etapa: p.etapa, sit: p.sit,
-    sub: p.sub, frete: p.frete, total: p.total, atraso: p.atraso, diasCaminho: p.diasCaminho, acoes: p.acoes,
+    sub: p.sub, frete: p.frete, total: p.total, atraso: p.atraso, diasCaminho: p.diasCaminho, acoes: p.acoes, teste: p.teste,
     parc: {
       n: ativas.length,
       ok: ativas.filter((x: Parc) => x.sit === "Q").length,
@@ -397,7 +407,22 @@ async function aPedido(c: Ctx, b: any) {
   const e = escopo(c);
   const unidades = await sql`select id, nome from pedidos_novo.unidade where ativo and ${e === null ? sql`true` : sql`id = any(${arr(e)}::uuid[])`} order by nome`;
   p.numLabRaw = p.numLab;
-  return { hoje: HOJE, lab: LABS[p.lab], pedido: p, unidades, pode_gravar: c.gravar, pode_admin: c.admin };
+  // receita ligada (quem assinou = prescritor do pedido); o financeiro não vê receitas
+  if (c.receitas) {
+    const [rc] = await sql`select r.id, to_char(r.mes, 'YYYY-MM') mes, r.status, pe.nome prescritor from pedidos_novo.pedido_receita x
+      join pedidos_novo.receita r on r.id = x.receita_id left join nucleo.pessoa pe on pe.id = r.prescritor_id where x.pedido_id = ${id} limit 1`;
+    p.receita = rc || null;
+  }
+  // conferência pedido × NF do sistema novo e itens abertos na fila Notas e PV
+  const [cf] = await sql`select ok, em::text em, resultado->>'nfs' nfs, resultado->'diverg' diverg, resultado->'avisos' avisos, resultado->'grupo' grupo
+    from pedidos_novo.conferencia_nf where pedido_id = ${id}`;
+  p.confNova = cf || null;
+  p.divergencias = await sql`select id, tipo, status from pedidos_novo.divergencia where pedido_id = ${id} and status in ('aberta', 'cobrar_lab')
+    and ${c.receitas ? sql`true` : sql`tipo = 'nf'`} order by tipo`;
+  const [pvf] = await sql`select exists (select 1 from pedidos_novo.divergencia where pedido_id = ${id} and tipo = 'pv') x`;
+  p.pvNaFila = pvf.x;
+  return { hoje: HOJE, lab: LABS[p.lab], pedido: p, unidades, pode_gravar: c.gravar, pode_admin: c.admin,
+    pode_criar: c.gravar && c.papeis.some((x) => ["operacoes", "admin", "central"].includes(x)) };
 }
 async function aUnidades(c: Ctx) {
   const e = escopo(c);
@@ -604,6 +629,13 @@ function traduzErroBanco(e: any): never {
   }
   throw e;
 }
+// correção manual de pedido já enviado: justificativa obrigatória (fica no registro de alterações)
+function exigeJust(v: unknown): string {
+  const j = txt(v, 500);
+  if (!j || j.length < 5) throw new Erro(400, "Escreva a justificativa da correção (pelo menos 5 letras).", "justificativa");
+  return j;
+}
+const recalcula = (tx: postgres.TransactionSql, id: string) => tx`select pedidos_novo.recalcular_conferencia_nf(${arr([id])}::uuid[])`;
 async function travaPedido(tx: postgres.TransactionSql, c: Ctx, id: string) {
   const [p] = await tx`select p.*, p.enviado_em::text t_enviado_em, p.expedido_em::text t_expedido_em, p.recebido_em::text t_recebido_em,
       p.confirmado_lab_em::text t_confirmado_lab_em, p.previsao_envio::text t_previsao_envio, p.frete::float8 t_frete
@@ -615,6 +647,7 @@ async function aEditarPedido(c: Ctx, b: any) {
   exigeEscrita(c);
   const id = uuid(b.pedido_id);
   const d = b.dados && typeof b.dados === "object" ? b.dados : {};
+  const just = txt(b.justificativa, 500);
   const HOJE = await hojeBanco();
   const upd: Record<string, unknown> = {};
   if ("num_lab" in d) upd.num_lab = txt(d.num_lab, 40);
@@ -648,6 +681,7 @@ async function aEditarPedido(c: Ctx, b: any) {
     return await comAuditoria(c, async (tx) => {
       const p = await travaPedido(tx, c, id);
       if (p.cancelado_em) throw new Erro(409, "Pedido cancelado não pode ser editado. Reabra o pedido antes.");
+      if (p.rascunho) throw new Erro(409, "Este pedido ainda é rascunho: altere pela tela do rascunho.");
       const m: Record<string, any> = { enviado_em: p.t_enviado_em, expedido_em: p.t_expedido_em, recebido_em: p.t_recebido_em, confirmado_lab_em: p.t_confirmado_lab_em, ...upd };
       if (m.enviado_em && m.expedido_em && m.expedido_em < m.enviado_em) throw new Erro(400, "A saída do laboratório não pode ser antes do envio do pedido.");
       if (m.enviado_em && m.confirmado_lab_em && m.confirmado_lab_em < m.enviado_em) throw new Erro(400, "A confirmação do laboratório não pode ser antes do envio do pedido.");
@@ -657,12 +691,14 @@ async function aEditarPedido(c: Ctx, b: any) {
       const atual = (k: string) => ("t_" + k in p ? p["t_" + k] : p[k]);
       const mudou = Object.keys(upd).filter((k) => k !== "recebido_por" && String(upd[k] ?? "") !== String(atual(k) ?? ""));
       if (!mudou.length) return { ok: true, mensagem: "Nada foi alterado." };
+      exigeJust(just);
       const so: Record<string, unknown> = {};
       for (const k of mudou) so[k] = upd[k];
       if ("recebido_em" in so) so.recebido_por = upd.recebido_por;
       await tx`update pedidos_novo.pedido set ${tx(so)} where id = ${id}`;
+      if ("frete" in so || "unidade_id" in so) await recalcula(tx, id);
       return { ok: true, mensagem: `Pedido ${p.num_interno || ""} atualizado (${mudou.length} ${mudou.length === 1 ? "campo" : "campos"}).` };
-    });
+    }, just || undefined);
   } catch (e) { if (e instanceof Erro) throw e; traduzErroBanco(e); }
 }
 async function aCancelarPedido(c: Ctx, b: any) {
@@ -674,8 +710,8 @@ async function aCancelarPedido(c: Ctx, b: any) {
     const p = await travaPedido(tx, c, id);
     if (p.cancelado_em) throw new Erro(409, "Este pedido já está cancelado.");
     await tx`update pedidos_novo.pedido set cancelado_em = now(), cancelado_motivo = ${motivo + " — por " + c.email} where id = ${id}`;
-    return { ok: true, mensagem: `Pedido ${p.num_interno || ""} cancelado.` };
-  });
+    return { ok: true, mensagem: p.rascunho ? "Rascunho cancelado (continua no sistema, marcado como cancelado)." : `Pedido ${p.num_interno || ""} cancelado.` };
+  }, motivo);
 }
 async function aReabrirPedido(c: Ctx, b: any) {
   exigeEscrita(c);
@@ -686,7 +722,7 @@ async function aReabrirPedido(c: Ctx, b: any) {
     if (!p.cancelado_em) throw new Erro(409, "Este pedido não está cancelado.");
     await tx`update pedidos_novo.pedido set cancelado_em = null, cancelado_motivo = null where id = ${id}`;
     return { ok: true, mensagem: `Pedido ${p.num_interno || ""} reaberto.` };
-  });
+  }, "Reaberto pelo administrador");
 }
 async function aSalvarParcela(c: Ctx, b: any) {
   exigeEscrita(c);
@@ -704,6 +740,7 @@ async function aSalvarParcela(c: Ctx, b: any) {
   const bOmie = dataOuNull(x.baixa_omie_em, "data da baixa na Omie");
   const bPlan = dataOuNull(x.baixa_planilha_em, "data da baixa na planilha");
   if ((bOmie && bOmie > HOJE) || (bPlan && bPlan > HOJE)) throw new Erro(400, "Data de baixa não pode ser no futuro.");
+  const just = id ? exigeJust(b.justificativa) : txt(b.justificativa, 500);
   try {
     return await comAuditoria(c, async (tx) => {
       const p = await travaPedido(tx, c, pedidoId);
@@ -716,11 +753,12 @@ async function aSalvarParcela(c: Ctx, b: any) {
         if (a.cancelada_motivo) throw new Erro(409, "Parcela cancelada não pode ser editada.");
         if (valor < a.pago - 0.005) throw new Erro(400, `O valor não pode ser menor do que já foi pago com comprovante (${R(a.pago)}).`);
         await tx`update pedidos_novo.parcela set ${tx(dados)} where id = ${id}`;
+        await recalcula(tx, pedidoId);
         return { ok: true, mensagem: `Parcela ${n}/${de} atualizada.` };
       }
       await tx`insert into pedidos_novo.parcela ${tx({ ...dados, pedido_id: pedidoId, origem: "digitado" })}`;
       return { ok: true, mensagem: `Parcela ${n}/${de} lançada.` };
-    });
+    }, just || undefined);
   } catch (e) { if (e instanceof Erro) throw e; traduzErroBanco(e); }
 }
 async function aCancelarParcela(c: Ctx, b: any) {
@@ -729,7 +767,7 @@ async function aCancelarParcela(c: Ctx, b: any) {
   const motivo = txt(b.motivo, 500);
   if (!motivo || motivo.length < 5) throw new Erro(400, "Escreva o motivo do cancelamento (pelo menos 5 letras).");
   return await comAuditoria(c, async (tx) => {
-    const [a] = await tx`select pa.id, pa.n, pa.de, pa.cancelada_motivo, pe.num_interno,
+    const [a] = await tx`select pa.id, pa.n, pa.de, pa.cancelada_motivo, pe.num_interno, pe.id pedido_id,
         (select count(*) from pedidos_novo.pagamento_parcela where parcela_id = pa.id)::int pags
       from pedidos_novo.parcela pa join pedidos_novo.pedido pe on pe.id = pa.pedido_id
       where pa.id = ${id} and ${filtroUn(c, "pe.unidade_id")} for update of pa`;
@@ -737,8 +775,9 @@ async function aCancelarParcela(c: Ctx, b: any) {
     if (a.cancelada_motivo) throw new Erro(409, "Esta parcela já está cancelada.");
     if (a.pags) throw new Erro(409, "Esta parcela tem comprovante de pagamento ligado; não pode ser cancelada.");
     await tx`update pedidos_novo.parcela set cancelada_motivo = ${motivo + " — por " + c.email} where id = ${id}`;
+    await recalcula(tx, a.pedido_id);
     return { ok: true, mensagem: `Parcela ${a.n}/${a.de} do pedido ${a.num_interno} cancelada.` };
-  });
+  }, motivo);
 }
 async function aProdutos(c: Ctx, b: any) {
   const id = uuid(b.pedido_id);
@@ -765,10 +804,12 @@ async function aSalvarItens(c: Ctx, b: any) {
     return { produto_id: pid, qtd, preco_unit: preco };
   });
   if (new Set(itens.map((x: any) => x.produto_id)).size !== itens.length) throw new Erro(400, "O mesmo produto aparece duas vezes. Junte as quantidades numa linha só.");
+  const just = exigeJust(b.justificativa);
   try {
     return await comAuditoria(c, async (tx) => {
       const p = await travaPedido(tx, c, id);
       if (p.cancelado_em) throw new Erro(409, "Pedido cancelado: não é possível alterar os itens.");
+      if (p.rascunho) throw new Erro(409, "Este pedido ainda é rascunho: altere pela tela do rascunho.");
       if (itens.length) {
         const ok = await tx`select count(*)::int n from pedidos_novo.produto where id = any(${arr(itens.map((x: any) => x.produto_id))}::uuid[]) and laboratorio_id = ${p.laboratorio_id}`;
         if (ok[0].n !== itens.length) throw new Erro(400, "Algum produto não é deste laboratório.");
@@ -776,8 +817,9 @@ async function aSalvarItens(c: Ctx, b: any) {
       await tx`delete from pedidos_novo.pedido_item where pedido_id = ${id}`;
       for (const x of itens) await tx`insert into pedidos_novo.pedido_item ${tx({ ...x, pedido_id: id })}`;
       const [t] = await tx`select coalesce(sum(total), 0)::float8 sub from pedidos_novo.pedido_item where pedido_id = ${id}`;
+      await recalcula(tx, id);
       return { ok: true, mensagem: `Itens do pedido ${p.num_interno || ""} salvos: ${plural(itens.length, "produto", "produtos")}, ${R(t.sub)}.` };
-    });
+    }, just);
   } catch (e) { if (e instanceof Erro) throw e; traduzErroBanco(e); }
 }
 
@@ -870,7 +912,7 @@ Deno.serve(async (req) => {
       cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo, baixar_sem_comprovante: aBaixarSemComprovante,
       editar_pedido: aEditarPedido, cancelar_pedido: aCancelarPedido, reabrir_pedido: aReabrirPedido,
       salvar_parcela: aSalvarParcela, cancelar_parcela: aCancelarParcela, produtos: aProdutos, salvar_itens: aSalvarItens,
-      ...acoesCadastros(DEP), ...acoesReceitas(DEP),
+      ...acoesCadastros(DEP), ...acoesReceitas(DEP), ...acoesNovoPedido(DEP), ...acoesNotas(DEP),
     };
     const f = acoes[acao];
     if (!f) throw new Erro(400, "Ação desconhecida.");

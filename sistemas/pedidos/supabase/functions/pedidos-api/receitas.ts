@@ -94,7 +94,10 @@ export function acoesReceitas(D: Dep) {
       }
       return t ? { em: e.em, por: e.por, texto: t } : null;
     }).filter(Boolean);
-    return { hoje: HOJE, receita: r, itens, produtos, rt_termo: rt || null, historico: hist, pode_gravar: c.receitasGravar };
+    // pedidos criados a partir desta receita (0015)
+    const pedidos = await sql`select pe.id, pe.num_interno num, pe.rascunho, pe.cancelado_em is not null cancelado, pe.enviado_em::text enviado_em
+      from pedidos_novo.pedido_receita x join pedidos_novo.pedido pe on pe.id = x.pedido_id where x.receita_id = ${id} order by pe.criado_em`;
+    return { hoje: HOJE, receita: r, itens, produtos, rt_termo: rt || null, historico: hist, pode_gravar: c.receitasGravar, pedidos };
   }
   async function recGerar(c: Ctx, b: any) {
     grava(c);

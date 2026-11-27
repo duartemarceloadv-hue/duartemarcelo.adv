@@ -196,11 +196,16 @@ export function acoesNovoPedido(D: Dep) {
         const ok = await tx`select count(*)::int n from pedidos_novo.produto where id = any(${arr(itens.map((x: any) => x.produto_id))}::uuid[]) and laboratorio_id = ${p.lab} and ativo`;
         if (ok[0].n !== itens.length) throw new Erro(400, "Algum produto não é deste laboratório.");
       }
+      const [lig] = await tx`select receita_id from pedidos_novo.pedido_receita where pedido_id = ${id}`;
+      // receita ligada agora num rascunho sem itens: os itens vêm do saldo da receita (como ao criar a partir dela)
+      if (r && !itens.length && (lig?.receita_id || null) !== r.id) {
+        for (const x of await saldo(tx, r.id, id)) { const q = r2(x.receita - x.usado); if (q > 0) itens.push({ produto_id: x.produto_id, qtd: q }); }
+      }
       const atuais = await tx`select produto_id, qtd::float8 qtd from pedidos_novo.pedido_item where pedido_id = ${id}`;
       const chave = (l: any[]) => l.map((x) => x.produto_id + ":" + r2(x.qtd)).sort().join("|");
       const mudouItens = chave(atuais) !== chave(itens);
       // correção manual do que veio da receita exige justificativa (como o ajuste da receita)
-      if (r && mudouItens) {
+      if (r && mudouItens && (lig?.receita_id || null) === r.id) {
         const s = await saldo(tx, r.id, id);
         const proposta = s.filter((x: any) => r2(x.receita - x.usado) > 0).map((x: any) => ({ produto_id: x.produto_id, qtd: r2(x.receita - x.usado) }));
         if (chave(proposta) !== chave(itens) && (!just || just.length < 5)) {
@@ -220,7 +225,6 @@ export function acoesNovoPedido(D: Dep) {
           await tx`insert into pedidos_novo.pedido_item (pedido_id, produto_id, qtd, preco_unit) values (${id}, ${x.produto_id}, ${x.qtd}, ${preco})`;
         }
       }
-      const [lig] = await tx`select receita_id from pedidos_novo.pedido_receita where pedido_id = ${id}`;
       if ((lig?.receita_id || null) !== (r?.id || null)) {
         await tx`delete from pedidos_novo.pedido_receita where pedido_id = ${id}`;
         if (r) await tx`insert into pedidos_novo.pedido_receita (pedido_id, receita_id) values (${id}, ${r.id})`;

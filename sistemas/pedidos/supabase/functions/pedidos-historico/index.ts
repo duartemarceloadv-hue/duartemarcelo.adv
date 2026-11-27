@@ -5,6 +5,7 @@
 //    pagamentos, itens, anexos e notas fiscais ligadas, já em texto, para a ficha mesclar com o histórico antigo.
 // Mesmas regras de acesso da pedidos-api: login, troca de senha feita, autenticador para quem exige (admin/financeiro),
 // escopo de unidades — tudo lido do núcleo (nucleo.acesso(email, 'laboratorios')) desde 27/11/2026.
+// v4 (27/11/2026): justificativa das correções, rascunho/envio, receita ligada e decisões da fila Notas e PV.
 // Resposta compatível com a versão anterior (dados, links, conf, historico); acrescenta "campos" e "novos".
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -33,7 +34,7 @@ const ROT: Record<string, Rot> = {
     num_lab: ["Nº no laboratório"], unidade_id: ["Unidade", "u"], enviado_em: ["Enviado ao laboratório", "d"],
     confirmado_lab_em: ["Confirmado pelo laboratório", "d"], previsao_envio: ["Previsão de saída", "d"], expedido_em: ["Saiu do laboratório", "d"],
     rastreio: ["Rastreio"], rastreio_situacao: ["Situação do rastreio"], recebido_em: ["Recebido na unidade", "d"], recebido_obs: ["Obs. do recebimento"],
-    frete: ["Frete", "r"], cancelado_motivo: ["Cancelamento"], obs: ["Observação"], tipo: ["Tipo"],
+    frete: ["Frete", "r"], cancelado_motivo: ["Cancelamento"], obs: ["Observação"], tipo: ["Tipo"], num_interno: ["Nº interno"],
   },
   parcela: {
     n: ["Nº da parcela"], de: ["Total de parcelas"], vencimento: ["Vencimento", "d"], valor: ["Valor", "r"], forma: ["Forma", "f"],
@@ -74,12 +75,12 @@ async function eventosNovos(pid: string) {
   const parcs = await sql`select id::text id, n, de from pedidos_novo.parcela where pedido_id = ${pid}`;
   const notas = await sql`select n.id::text id, n.numero from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id where np.pedido_id = ${pid}`;
   const pids = parcs.map((x) => x.id), nids = notas.map((x) => x.id);
-  const ev = await sql`select tabela, acao, antes, depois, por, em::text em from pedidos_novo.evento
+  const ev = await sql`select tabela, acao, antes, depois, por, em::text em, justificativa from pedidos_novo.evento
     where por <> 'postgres' and (
       (tabela = 'pedido' and registro_id = ${pid})
       or (tabela = 'parcela' and registro_id = any(${arr(pids)}::text[]))
       or (tabela = 'nota_fiscal' and registro_id = any(${arr(nids)}::text[]))
-      or (tabela in ('pedido_item', 'pedido_arquivo', 'nota_pedido') and coalesce(depois, antes)->>'pedido_id' = ${pid})
+      or (tabela in ('pedido_item', 'pedido_arquivo', 'nota_pedido', 'pedido_receita', 'divergencia') and coalesce(depois, antes)->>'pedido_id' = ${pid})
       or (tabela = 'pagamento_parcela' and coalesce(depois, antes)->>'parcela_id' = any(${arr(pids)}::text[]))
     ) order by em desc, id desc limit 300`;
   if (!ev.length) return [];
@@ -103,7 +104,8 @@ async function eventosNovos(pid: string) {
     const a = e.antes, d = e.depois, r = d || a || {};
     let t = "";
     if (e.tabela === "pedido") {
-      if (e.acao === "insert") t = "Pedido criado";
+      if (e.acao === "insert") t = d?.rascunho ? "Pedido criado em rascunho" + (d?.teste ? " (ambiente de teste)" : "") : "Pedido criado";
+      else if (a?.rascunho && d && !d.rascunho) t = `Envio confirmado: nº ${d.num_interno || "—"}, enviado ao laboratório em ${val(d.enviado_em, "d", uns)}`;
       else { const l = difs("pedido", a, d, uns); if (l.length) t = l.join(" · "); }
     } else if (e.tabela === "parcela") {
       const q = parc[r.id] || "Parcela";
@@ -118,10 +120,17 @@ async function eventosNovos(pid: string) {
     } else if (e.tabela === "pedido_item") {
       const nm = prod[r.produto_id] || "produto";
       t = e.acao === "delete" ? `Item removido: ${nm}` : `Item ${e.acao === "insert" ? "incluído" : "alterado"}: ${nm} — ${Number(r.qtd).toLocaleString("pt-BR")} × ${R(r.preco_unit)}`;
+    } else if (e.tabela === "pedido_receita") {
+      t = e.acao === "delete" ? "Receita do mês desligada do pedido" : "Receita do mês ligada ao pedido";
+    } else if (e.tabela === "divergencia") {
+      const S: Record<string, string> = { aberta: "aberta", cobrar_lab: "cobrar o laboratório", aceita: "diferença aceita", corrigida: "corrigida", resolvida: "resolvida no recálculo", substituida: "substituída por nova conferência" };
+      const q = r.tipo === "pv" ? "Divergência com o pedido de venda" : "Divergência pedido × NF";
+      if (e.acao === "insert") t = `${q}: ${r.origem === "sistema_antigo" ? "trazida do sistema antigo" : "aberta pelo recálculo"}`;
+      else if (a?.status !== d?.status) t = `${q}: ${S[a?.status] || a?.status} → ${S[d?.status] || d?.status}`;
     } else if (e.tabela === "nota_pedido") {
       t = `${nota[r.nota_id] || "Nota fiscal"} ${e.acao === "delete" ? "desligada do" : "ligada ao"} pedido`;
     }
-    if (t) out.push({ em: e.em, por: e.por, texto: t });
+    if (t) out.push({ em: e.em, por: e.por, texto: e.justificativa ? `${t} — justificativa: ${e.justificativa}` : t });
   }
   return out;
 }
