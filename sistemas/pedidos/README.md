@@ -15,7 +15,7 @@ conforme o documento de decisão do conselho de 26/11/2026.
 |---|---|
 | Quem pede | No início a central pede e a unidade confirma o recebimento; a unidade passa a pedir na fase 2 |
 | Quem paga | Cada unidade (CNPJ) paga o seu |
-| Pagamento | A parcela só finaliza com **3 baixas**: Omie (controle do laboratório), planilha do laboratório e nosso sistema (comprovante, ou baixa sem comprovante quando a Omie já baixou). Falta Omie: pedir ao laboratório. Falta planilha: pendência de informação. Injemed não tem Omie/planilha: só vale a nossa baixa (ficha.baixas) |
+| Pagamento | A parcela só finaliza com **3 baixas**: Omie (controle do laboratório), planilha do laboratório e nosso sistema (comprovante, ou baixa sem comprovante quando a Omie já baixou). Falta Omie: pedir ao laboratório. Falta planilha: pendência de informação. Injemed não tem Omie/planilha: só vale a nossa baixa (ficha.baixas). A planilha do Centro Paulista só registra a 1ª parcela ("Data Pagto" por pedido): da 2ª em diante valem Omie + nossa baixa (ficha.planilha_so_primeira) |
 | Aprovação | Pedido não precisa de aprovação |
 | Prazo do laboratório | 30 dias corridos (não há prazo contratado) |
 | Prescritor | Só o RT do termo da unidade com o laboratório |
@@ -26,7 +26,9 @@ conforme o documento de decisão do conselho de 26/11/2026.
 
 ## Estrutura (migrations)
 
-- `0005_omie_e_controle_do_laboratorio.sql` (substituída) e `0006_tres_baixas.sql`: situação da parcela pelas 3 baixas.
+- `0005_omie_e_controle_do_laboratorio.sql` (substituída) `0006_tres_baixas.sql` e `0007_planilha_so_primeira_parcela.sql`: situação da parcela pelas 3 baixas.
+  Em 27/11/2026 as datas de pagamento da planilha "Dr Hair - controle Edu" foram gravadas nas 1ªs parcelas sem baixa
+  (65 parcelas, registro de alterações com por = `importacao-planilha-cp`).
 - `supabase/migrations/0001_pedidos_novo_base.sql`: cadastros, pedido, receita com saldo, parcela × pagamento,
   nota fiscal, pendências, execução dos conectores, situação calculada (`v_pedido`, `v_parcela`),
   registro de alterações imutável e isolamento total (RLS em tudo, sem acesso pela internet).
