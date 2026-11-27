@@ -44,10 +44,18 @@ export function acoesReceitas(D: Dep) {
       from pedidos_novo.receita r join nucleo.unidade u on u.id = r.unidade_id left join nucleo.pessoa p on p.id = r.prescritor_id
       where r.tipo = 'mensal' and r.mes = ${mes}::date and ${filtro(c, "r.unidade_id")} and ${un ? sql`r.unidade_id = ${un}` : sql`true`}
       order by u.nome`;
+    // unidades ativas sem receita (não cancelada) no mês: aparecem na lista para gerar só elas
+    const sem = await sql`
+      select u.id unidade_id, u.nome unidade,
+        (select pt.nome from pedidos_novo.termo t join nucleo.pessoa pt on pt.id = t.rt_id where t.unidade_id = u.id and t.laboratorio_id = 'CP' and t.ate is null order by t.de desc limit 1) rt_termo
+      from nucleo.unidade u
+      where u.ativo and ${filtro(c, "u.id")} and ${un ? sql`u.id = ${un}` : sql`true`}
+        and not exists (select 1 from pedidos_novo.receita r where r.tipo = 'mensal' and r.unidade_id = u.id and r.laboratorio_id = 'CP' and r.mes = ${mes}::date and r.status <> 'cancelada')
+      order by u.nome`;
     const meses = await sql`select distinct to_char(mes, 'YYYY-MM') m from pedidos_novo.receita where tipo = 'mensal' and ${filtro(c, "unidade_id")} order by 1 desc`;
     const cont: Record<string, number> = {};
     l.forEach((x) => (cont[x.status] = (cont[x.status] || 0) + 1));
-    return { hoje: HOJE, mes: mes.slice(0, 7), meses: meses.map((x) => x.m), receitas: l, contagem: cont, pode_gravar: c.receitasGravar };
+    return { hoje: HOJE, mes: mes.slice(0, 7), meses: meses.map((x) => x.m), receitas: l, sem_receita: sem, contagem: cont, pode_gravar: c.receitasGravar, pode_gerar: c.receitasGravar && c.todas };
   }
   async function recReceita(c: Ctx, b: any) {
     ve(c);

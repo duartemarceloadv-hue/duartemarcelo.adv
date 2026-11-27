@@ -9,35 +9,66 @@ var MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto
 function nomeMes(m){var p=String(m||'').split('-');return p.length<2?m:MESES[+p[1]-1]+'/'+p[0]}
 function somaMes(m,n){var p=m.split('-'),d=new Date(Date.UTC(+p[0],+p[1]-1+n,1));return d.toISOString().slice(0,7)}
 function qtd(v){return v==null?'—':Number(v).toLocaleString('pt-BR')}
-var est={mes:'',sit:'',dados:null,ficha:null,termos:null,gerar:null};
+var est={mes:'',sit:'',orig:'',ass:'',marc:{},dados:null,ficha:null,termos:null,gerar:null,gOpc:null,tLab:'',tReg:''};
+// quem assina: definido na receita, RT do termo (definido ao gerar) ou sem termo
+var ASS={definido:'Definido na receita',rt:'RT do termo (ao gerar)',semtermo:'Sem termo com o laboratório'};
+function assDe(r){return r.prescritor?'definido':(r.rt_termo?'rt':'semtermo')}
+function podeGerar(){var d=est.dados,eu=D.eu()||{};return !!(d&&(d.pode_gerar!==undefined?d.pode_gerar:(eu.receitas_gravar&&eu.todas!==false)))}
+// linhas da lista: receitas do mês + unidades ativas ainda sem receita no mês
+function linhas(){
+  var d=est.dados; if(!d) return [];
+  return d.receitas.concat((d.sem_receita||[]).map(function(u){return {sem:true,id:'',unidade_id:u.unidade_id,unidade:u.unidade,status:'sem',rt_termo:u.rt_termo,prescritor:null}}));
+}
+// só rascunho ou unidade sem receita pode ser gerada de novo; gerada/enviada ao RT não muda
+function marcavel(r){return podeGerar()&&(r.sem||r.status==='rascunho')}
+function marcadas(){return linhas().filter(function(r){return marcavel(r)&&est.marc[r.unidade_id]})}
 
 /* ---------- lista ---------- */
 function telaLista(){
-  var d=est.dados, eu=D.eu()||{};
+  var d=est.dados, pg=podeGerar();
   var mes=est.mes||(d&&d.mes)||D.hoje().slice(0,7);
-  var ac=eu.receitas_gravar?'<button type="button" class="btn pri" id="rec-gerar">Gerar receitas do mês</button>':'';
+  var ac=pg||(D.eu()||{}).receitas_gravar?'<button type="button" class="btn pri" id="rec-gerar">Gerar receitas do mês</button>':'';
   var linha='';
-  if(d){var c=d.contagem||{};linha=D.plural(d.receitas.length,'receita','receitas')+' de '+nomeMes(mes)+Object.keys(ST).filter(function(k){return c[k]}).map(function(k){return ' · '+ST[k][0]+': '+c[k]}).join('')+(D.escopoTxt()?' · '+D.escopoTxt():'')}
+  if(d){var c=d.contagem||{},ns=(d.sem_receita||[]).filter(function(u){return !D.estado.unidade||u.unidade_id===D.estado.unidade}).length;
+    linha=D.plural(d.receitas.length,'receita','receitas')+' de '+nomeMes(mes)+Object.keys(ST).filter(function(k){return c[k]}).map(function(k){return ' · '+ST[k][0]+': '+c[k]}).join('')+(ns?' · '+D.plural(ns,'unidade sem receita','unidades sem receita'):'')+(D.escopoTxt()?' · '+D.escopoTxt():'')}
   var h=D.titulo('Receitas do mês',ac,linha);
   var meses=[];[somaMes(D.hoje().slice(0,7),1),D.hoje().slice(0,7)].concat((d&&d.meses)||[]).forEach(function(m){if(meses.indexOf(m)<0)meses.push(m)});
   meses.sort().reverse();
+  var l=linhas().filter(function(r){
+    if(D.estado.unidade&&r.unidade_id!==D.estado.unidade) return false;
+    if(est.sit&&r.status!==est.sit) return false;
+    if(est.orig&&(r.sem||(est.orig==='antigo')!==!!r.legado)) return false;
+    if(est.ass&&assDe(r)!==est.ass) return false;
+    return true});
+  var lm=l.filter(marcavel), todas=lm.length&&lm.every(function(r){return est.marc[r.unidade_id]});
   h+='<div class="filtros">'+D.campo('Mês','<select class="sel" id="rec-mes">'+meses.map(function(m){return D.opt(m,nomeMes(m),mes)}).join('')+'</select>')+
-    D.campo('Situação','<select class="sel" id="rec-sit">'+D.opt('','Todas',est.sit)+Object.keys(ST).map(function(k){return D.opt(k,ST[k][0],est.sit)}).join('')+'</select>')+'</div>';
+    D.campo('Situação','<select class="sel" id="rec-sit">'+D.opt('','Todas',est.sit)+Object.keys(ST).map(function(k){return D.opt(k,ST[k][0],est.sit)}).join('')+D.opt('sem','Sem receita no mês',est.sit)+'</select>')+
+    D.campo('Origem','<select class="sel" id="rec-orig">'+D.opt('','Todas',est.orig)+D.opt('antigo','Sistema antigo',est.orig)+D.opt('novo','Sistema novo',est.orig)+'</select>')+
+    D.campo('Quem assina','<select class="sel" id="rec-ass">'+D.opt('','Todos',est.ass)+Object.keys(ASS).map(function(k){return D.opt(k,ASS[k],est.ass)}).join('')+'</select>')+
+    ((est.sit||est.orig||est.ass)?'<button type="button" class="botao sec mini" id="rec-limpar">Limpar filtros</button>':'')+
+    (d&&lm.length?'<label class="campo chk"><input type="checkbox" id="rec-todas"'+(todas?' checked':'')+'><span>Marcar todas que podem ser geradas ('+lm.length+')</span></label>':'')+'</div>';
   if(!d) return h+'<div class="tabela"><div class="vazio">Carregando as receitas…</div></div>';
-  var l=d.receitas.filter(function(r){return (!est.sit||r.status===est.sit)&&(!D.estado.unidade||r.unidade_id===D.estado.unidade)});
-  h+='<div class="tabela cartoes"><table><thead><tr><th>Unidade</th><th>Situação</th><th>Quem assina</th><th class="r">Produtos</th><th class="r">Total (unid.)</th><th>Ajustes</th></tr></thead><tbody>';
-  if(!l.length) h+='<tr><td colspan="6" class="vazio">'+(d.receitas.length?'Nenhuma receita com esses filtros.':'Nenhuma receita de '+esc(nomeMes(mes))+'. '+(eu.receitas_gravar?'Use “Gerar receitas do mês”.':''))+'</td></tr>';
+  h+='<div class="tabela cartoes com-sel"><table><thead><tr><th class="sel-c"></th><th>Unidade</th><th>Situação</th><th>Origem</th><th>Quem assina</th><th>Assinatura</th><th class="r">Produtos</th><th class="r">Total (unid.)</th><th>Ajustes</th>'+(pg?'<th>Gerar</th>':'')+'</tr></thead><tbody>';
+  if(!l.length) h+='<tr><td colspan="'+(pg?10:9)+'" class="vazio">'+(linhas().length?'Nenhuma receita com esses filtros.':'Nenhuma receita de '+esc(nomeMes(mes))+'. '+(pg?'Use “Gerar receitas do mês”.':''))+'</td></tr>';
   l.forEach(function(r){
-    var quem=r.prescritor?esc(r.prescritor):(r.rt_termo?'<span class="fraco">RT do termo: '+esc(r.rt_termo)+'</span>':'<span class="nao">sem termo com o laboratório</span>');
-    h+='<tr class="lp" data-rec="'+esc(r.id)+'" tabindex="0"><td class="c1"><b>'+esc(r.unidade)+'</b>'+(r.legado?'<span class="sub2">veio do sistema antigo</span>':'')+'</td>'+
-      '<td class="c2">'+D.tag(ST[r.status]||[r.status,'n'])+'</td>'+
-      '<td class="cl"><span class="rot-m">Assina </span>'+quem+'</td>'+
-      '<td class="cl r num"><span class="rot-m">Produtos </span>'+(r.itens||(r.sem_pedidos?'<span class="fraco">sem pedidos no período</span>':'0'))+'</td>'+
-      '<td class="cl r num"><span class="rot-m">Total </span>'+qtd(r.total)+'</td>'+
-      '<td class="cl">'+(r.ajustados?D.plural(r.ajustados,'produto ajustado','produtos ajustados'):'<span class="fraco">nenhum</span>')+'</td></tr>';
+    var a=assDe(r), nome=r.prescritor||r.rt_termo, mk=marcavel(r), sem=r.sem;
+    h+='<tr'+(sem?'':' class="lp" data-rec="'+esc(r.id)+'" tabindex="0"')+'><td class="sel-c">'+(mk?'<input type="checkbox" data-rec-sel="'+esc(r.unidade_id)+'" aria-label="Marcar '+esc(r.unidade)+'"'+(est.marc[r.unidade_id]?' checked':'')+'>':'')+'</td>'+
+      '<td class="c1"><b>'+esc(r.unidade)+'</b></td>'+
+      '<td class="c2">'+(sem?D.tag(['Sem receita no mês','a']):D.tag(ST[r.status]||[r.status,'n']))+'</td>'+
+      '<td class="cl'+(sem?' vz':'')+'"><span class="rot-m">Origem </span>'+(sem?'<span class="fraco">—</span>':(r.legado?'Sistema antigo':'Sistema novo'))+'</td>'+
+      '<td class="cl'+(nome?'':' vz')+'"><span class="rot-m">Quem assina </span>'+(nome?esc(nome):'<span class="fraco">—</span>')+'</td>'+
+      '<td class="cl"><span class="rot-m">Assinatura </span>'+(a==='semtermo'?'<span class="nao">'+ASS[a]+'</span>':(a==='rt'?'<span class="fraco">'+ASS[a]+'</span>':ASS[a]))+'</td>'+
+      '<td class="cl r num'+(sem?' vz':'')+'"><span class="rot-m">Produtos </span>'+(sem?'<span class="fraco">—</span>':(r.itens||(r.sem_pedidos?'<span class="fraco">sem pedidos no período</span>':'0')))+'</td>'+
+      '<td class="cl r num'+(sem?' vz':'')+'"><span class="rot-m">Total </span>'+(sem?'<span class="fraco">—</span>':qtd(r.total))+'</td>'+
+      '<td class="cl'+(sem?' vz':'')+'"><span class="rot-m">Ajustes </span>'+(sem?'<span class="fraco">—</span>':(r.ajustados?D.plural(r.ajustados,'produto ajustado','produtos ajustados'):'<span class="fraco">nenhum</span>'))+'</td>'+
+      (pg?'<td class="cl'+(mk?'':' vz')+'">'+(mk?'<button type="button" class="botao sec mini" data-rec-un="'+esc(r.unidade_id)+'">'+(sem?'Gerar só esta':'Recalcular só esta')+'</button>':'<span class="fraco">—</span>')+'</td>':'')+'</tr>';
   });
-  return h+'</tbody></table></div>';
+  h+='</tbody></table></div>';
+  var mc=marcadas();
+  if(mc.length) h+='<div class="lote" id="rec-lote"><span>'+D.plural(mc.length,'unidade marcada','unidades marcadas')+' · '+esc(nomeMes(mes))+'</span><button type="button" class="botao sec mini" id="rec-desmarcar">Desmarcar</button><button type="button" class="botao mini" id="rec-gerar-marc">Gerar as marcadas</button></div>';
+  return h;
 }
+function redesenha(){var y=window.scrollY;$('#tela').innerHTML=telaLista();window.scrollTo(0,y)}
 async function carregarLista(){
   est.dados=null; if(D.estado.tela==='receitas') $('#tela').innerHTML=telaLista();
   try{var d=await D.api('receitas',{mes:est.mes||undefined});est.dados=d;if(!est.mes)est.mes=d.mes;if(D.estado.tela==='receitas')$('#tela').innerHTML=telaLista()}
@@ -50,6 +81,7 @@ function ficha(d){
   var h='<nav class="migalha" aria-label="Caminho"><button type="button" data-ir="receitas">Receitas do mês</button><span aria-hidden="true">›</span><span>Ficha da receita</span></nav>';
   var acs='';
   if(edita) acs+='<button type="button" class="btn" id="rec-ajustar">Ajustar quantidades</button>';
+  if(pode&&r.status==='rascunho'&&(D.eu()||{}).todas!==false) acs+='<button type="button" class="btn" id="rec-recalc">Recalcular só esta unidade</button>';
   if(pode&&r.status==='rascunho') acs+='<button type="button" class="btn pri" id="rec-st" data-para="gerada">Marcar como gerada</button>';
   if(pode&&r.status==='gerada') acs+='<button type="button" class="btn pri" id="rec-st" data-para="enviada_rt">Marcar como enviada ao RT</button>';
   acs+='<button type="button" class="btn" id="rec-pedido" aria-disabled="true" title="Fica para a próxima etapa">Criar pedido <span class="selo n">em breve</span></button>';
@@ -99,29 +131,57 @@ async function abrirFicha(id,semHist){
   catch(x){if(x.status!==401&&x.status!==403)$('#tela').innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}
 }
 
-/* ---------- gerar ---------- */
-function abrirGerar(){
-  var mes=est.mes||D.hoje().slice(0,7), ms=[somaMes(D.hoje().slice(0,7),1),D.hoje().slice(0,7),somaMes(D.hoje().slice(0,7),-1)];
+/* ---------- gerar (todas, várias ou uma unidade; sempre com prévia antes de gravar) ---------- */
+// o: {mes, unidades:[ids], receitaId} — unidades preenchidas = começa em "só as unidades escolhidas"
+function abrirGerar(o){
+  o=o||{}; est.gOpc=o;
+  var mes=o.mes||est.mes||D.hoje().slice(0,7), ms=[somaMes(D.hoje().slice(0,7),1),D.hoje().slice(0,7),somaMes(D.hoje().slice(0,7),-1)];
   if(ms.indexOf(mes)<0) ms.push(mes);
-  D.abrirDlg('Gerar receitas do mês','<form id="f-rec-gerar" novalidate><div class="dlg-corpo"><p class="fraco" style="margin:0 0 10px">Calcula a receita de cada unidade pela regra do sistema antigo e cria em <b>rascunho</b>. Receitas já geradas ou enviadas ao RT não são mexidas; nos rascunhos, os ajustes feitos à mão são mantidos. Primeiro o sistema mostra o que vai fazer.</p>'+
-    D.campoD('Mês da receita','<select class="ent" id="rg-mes">'+ms.map(function(m){return D.opt(m,nomeMes(m),mes)}).join('')+'</select>')+'<div id="rg-prev"></div>'+
-    '<div id="dlg-erro"></div></div><div class="dlg-pe"><button type="button" class="botao sec" id="dlg-cancela">Cancelar</button><button type="submit" class="botao" id="rg-ok">Ver o que será feito</button></div></form>');
-  est.gerar=null;
+  var esc1=!!(o.unidades&&o.unidades.length), sel={}; (o.unidades||[]).forEach(function(id){sel[id]=1});
+  // lista de unidades do cabeçalho + as que vieram marcadas na lista de receitas (se faltarem lá)
+  var uns=D.unidades().slice(), nomes={};
+  linhas().forEach(function(r){nomes[r.unidade_id]=r.unidade});
+  (o.unidades||[]).forEach(function(id){if(!uns.some(function(u){return u.id===id}))uns.push({id:id,nome:nomes[id]||D.nomeUnidade(id)||'Unidade'})});
+  uns.sort(function(a,b){return a.nome.localeCompare(b.nome,'pt-BR')});
+  var nome1=o.unidades&&o.unidades.length===1?(nomes[o.unidades[0]]||D.nomeUnidade(o.unidades[0])||(est.ficha&&est.ficha.receita.unidade)):'';
+  var tit=nome1?'Gerar receita — '+nome1:'Gerar receitas do mês';
+  D.abrirDlg(tit,'<form id="f-rec-gerar" novalidate><div class="dlg-corpo"><p class="fraco" style="margin:0 0 10px">Calcula a receita pela regra do sistema antigo e cria em <b>rascunho</b>. Receitas já geradas ou enviadas ao RT não são mexidas; nos rascunhos, os ajustes feitos à mão são mantidos. Primeiro o sistema mostra o que vai fazer.</p>'+
+    D.campoD('Mês da receita','<select class="ent" id="rg-mes">'+ms.map(function(m){return D.opt(m,nomeMes(m),mes)}).join('')+'</select>')+
+    '<div class="campo"><span>Unidades</span></div><div class="escolha">'+
+      '<label><input type="radio" name="rg-esc" value="todas"'+(esc1?'':' checked')+'><span>Todas as unidades</span><span></span></label>'+
+      '<label><input type="radio" name="rg-esc" value="escolhidas"'+(esc1?' checked':'')+'><span>Só as unidades escolhidas</span><span class="fraco" id="rg-n"></span></label></div>'+
+    '<div class="escolha" id="rg-lista"'+(esc1?'':' hidden')+'>'+uns.map(function(u){return '<label><input type="checkbox" data-rg-un="'+esc(u.id)+'"'+(sel[u.id]?' checked':'')+'><span>'+esc(u.nome)+'</span><span></span></label>'}).join('')+'</div>'+
+    '<div id="rg-prev"></div><div id="dlg-erro"></div></div><div class="dlg-pe"><button type="button" class="botao sec" id="dlg-cancela">Cancelar</button><button type="submit" class="botao" id="rg-ok">Ver o que será feito</button></div></form>');
+  est.gerar=null; contaEscolhidas();
 }
+function escolhidas(){
+  var r=$('input[name=rg-esc]:checked'); if(!r||r.value!=='escolhidas') return null;
+  return [].map.call(document.querySelectorAll('#rg-lista input[data-rg-un]:checked'),function(i){return i.dataset.rgUn});
+}
+function contaEscolhidas(){var n=$('#rg-n'),l=escolhidas();if(n)n.textContent=l?D.plural(l.length,'escolhida','escolhidas'):''}
+function zeraPrevia(){est.gerar=null;var b=$('#rg-ok');if(b){b.disabled=false;b.textContent='Ver o que será feito'}var p=$('#rg-prev');if(p)p.innerHTML='';contaEscolhidas()}
 async function enviarGerar(e){
   e.preventDefault();
-  var bt=$('#rg-ok'), mes=$('#rg-mes').value, t=bt.textContent; bt.disabled=true; bt.textContent='Calculando…';
+  var bt=$('#rg-ok'), mes=$('#rg-mes').value, uns=escolhidas(), t=bt.textContent;
+  if(uns&&!uns.length) return D.erroDlg('Escolha ao menos uma unidade (ou marque “Todas as unidades”).');
+  var chave=mes+'|'+(uns?uns.slice().sort().join(','):'todas'), corpo={mes:mes};
+  if(uns) corpo.unidades=uns;
+  bt.disabled=true; bt.textContent='Calculando…'; if($('#dlg-erro'))$('#dlg-erro').innerHTML='';
   try{
-    if(!est.gerar||est.gerar.mes!==mes){
-      var r=await D.api('gerar_receitas',{mes:mes,simular:true}); est.gerar=r;
+    if(!est.gerar||est.gerar.chave!==chave){
+      var r=await D.api('gerar_receitas',Object.assign({simular:true},corpo)); est.gerar={chave:chave,r:r};
       var l=r.unidades||[];
-      $('#rg-prev').innerHTML='<div class="alerta"><b>'+esc(nomeMes(r.mes))+':</b> '+D.plural(r.criadas,'receita nova','receitas novas')+' em rascunho, '+D.plural(r.atualizadas,'rascunho recalculado','rascunhos recalculados')+', '+D.plural(r.ignoradas,'já gerada ou enviada (não muda)','já geradas ou enviadas (não mudam)')+'. Período do cálculo: '+D.dt(r.periodo.de)+' a '+D.dt(r.periodo.ate)+'.</div>'+
-        '<ul class="arqs">'+l.filter(function(x){return x.acao!=='ignorada (gerada)'&&x.acao!=='ignorada (enviada_rt)'}).map(function(x){return '<li><span class="nm">'+esc(x.unidade)+'</span><span class="mt">'+esc(x.acao)+' · '+D.plural(Object.keys(x.itens||{}).length,'produto','produtos')+' · '+D.plural(x.pedidos,'pedido','pedidos')+'</span></li>'}).join('')+'</ul>';
+      var mud=l.filter(function(x){return x.acao!=='ignorada (gerada)'&&x.acao!=='ignorada (enviada_rt)'}), ign=l.filter(function(x){return mud.indexOf(x)<0});
+      $('#rg-prev').innerHTML='<div class="alerta"><b>'+esc(nomeMes(r.mes))+(uns?' · '+D.plural(uns.length,'unidade escolhida','unidades escolhidas'):' · todas as unidades')+':</b> '+D.plural(r.criadas,'receita nova','receitas novas')+' em rascunho, '+D.plural(r.atualizadas,'rascunho recalculado','rascunhos recalculados')+', '+D.plural(r.ignoradas,'já gerada ou enviada (não muda)','já geradas ou enviadas (não mudam)')+'. Período do cálculo: '+D.dt(r.periodo.de)+' a '+D.dt(r.periodo.ate)+'.</div>'+
+        '<ul class="arqs">'+mud.map(function(x){return '<li><span class="nm">'+esc(x.unidade)+'</span><span class="mt">'+esc(x.acao)+' · '+D.plural(Object.keys(x.itens||{}).length,'produto','produtos')+' · '+D.plural(x.pedidos,'pedido','pedidos')+'</span></li>'}).join('')+
+        (uns?ign.map(function(x){return '<li><span class="nm">'+esc(x.unidade)+'</span><span class="mt">'+esc(x.acao.replace('enviada_rt','enviada ao RT'))+' · não muda</span></li>'}).join(''):'')+'</ul>';
       bt.disabled=!(r.criadas||r.atualizadas); bt.textContent=(r.criadas||r.atualizadas)?'Gerar agora':'Nada a gerar'; return;
     }
     bt.textContent='Gerando…';
-    var g=await D.api('gerar_receitas',{mes:mes,simular:false});
-    D.fecharDlg(); D.avisar(g.mensagem||'Receitas geradas.'); est.mes=mes; carregarLista();
+    var g=await D.api('gerar_receitas',Object.assign({simular:false},corpo));
+    var o=est.gOpc||{};
+    D.fecharDlg(); D.avisar(g.mensagem||'Receitas geradas.'); est.marc={};
+    if(o.receitaId&&D.estado.tela==='receita') abrirFicha(o.receitaId,true); else {est.mes=mes; if(D.estado.tela==='receitas') carregarLista(); else D.ir('receitas')}
   }catch(x){bt.disabled=false;bt.textContent=t;D.erroDlg(x)}
 }
 
@@ -149,15 +209,25 @@ function enviarAjustar(e){
 }
 
 /* ---------- termos ---------- */
+function nomeLab(t){return t.lab==='CP'?'Centro Paulista':t.lab_nome}
 function telaTermos(){
   var d=est.termos;
-  var h=D.titulo('Termos de responsabilidade','',d?D.plural(d.termos.length,'termo vigente','termos vigentes')+' · '+D.plural(d.sem_termo.length,'unidade sem termo','unidades sem termo'):'');
+  var h=D.titulo('Termos de responsabilidade','',d?D.plural(d.termos.length,'termo','termos')+' · '+D.plural(d.sem_termo.length,'unidade sem termo vigente','unidades sem termo vigente'):'');
+  var labs={}; if(d) d.termos.forEach(function(t){labs[t.lab]=nomeLab(t)});
+  h+='<div class="filtros">'+D.campo('Laboratório','<select class="sel" id="t-lab">'+D.opt('','Todos',est.tLab)+Object.keys(labs).map(function(k){return D.opt(k,labs[k],est.tLab)}).join('')+'</select>')+
+    D.campo('Registro do RT','<select class="sel" id="t-reg">'+D.opt('','Todos',est.tReg)+D.opt('com','Com registro',est.tReg)+D.opt('sem','Sem registro',est.tReg)+'</select>')+
+    ((est.tLab||est.tReg)?'<button type="button" class="botao sec mini" id="t-limpar">Limpar filtros</button>':'')+'</div>';
   if(!d) return h+'<div class="tabela"><div class="vazio">Carregando os termos…</div></div>';
-  var l=d.termos.filter(function(t){return !D.estado.unidade||t.unidade_id===D.estado.unidade});
-  h+='<div class="tabela cartoes"><table><thead><tr><th>Unidade</th><th>Laboratório</th><th>RT do termo</th><th>Desde</th><th>Arquivo</th></tr></thead><tbody>';
-  if(!l.length) h+='<tr><td colspan="5" class="vazio">Nenhum termo.</td></tr>';
-  l.forEach(function(t){h+='<tr><td class="c1"><b>'+esc(t.unidade)+'</b></td><td class="c2">'+esc(t.lab==='CP'?'Centro Paulista':t.lab_nome)+'</td><td class="cl"><span class="rot-m">RT </span>'+esc(t.rt)+(t.registro?'<span class="sub2">'+esc(t.registro)+'</span>':'<span class="sub2 vermelho">registro não informado</span>')+'</td>'+
-    '<td class="cl num"><span class="rot-m">Desde </span>'+D.dt(t.de)+(t.ate?' a '+D.dt(t.ate):'')+'</td><td class="cl">'+(t.arquivo_local==='sistema_antigo'?'<span class="fraco">no sistema antigo</span>':'')+(t.arquivo_nome?'<span class="sub2">'+esc(t.arquivo_nome)+'</span>':'')+'</td></tr>'});
+  var l=d.termos.filter(function(t){return (!D.estado.unidade||t.unidade_id===D.estado.unidade)&&(!est.tLab||t.lab===est.tLab)&&(!est.tReg||(est.tReg==='com')===!!t.registro)});
+  h+='<div class="tabela cartoes"><table><thead><tr><th>Unidade</th><th>Laboratório</th><th>RT do termo</th><th>Registro</th><th>Desde</th><th>Até</th><th>Arquivo</th><th>Onde está o arquivo</th></tr></thead><tbody>';
+  if(!l.length) h+='<tr><td colspan="8" class="vazio">Nenhum termo com esses filtros.</td></tr>';
+  l.forEach(function(t){h+='<tr><td class="c1"><b>'+esc(t.unidade)+'</b></td><td class="c2">'+esc(nomeLab(t))+'</td>'+
+    '<td class="cl"><span class="rot-m">RT </span>'+esc(t.rt)+'</td>'+
+    '<td class="cl"><span class="rot-m">Registro </span>'+(t.registro?esc(t.registro):'<span class="nao">não informado</span>')+'</td>'+
+    '<td class="cl num"><span class="rot-m">Desde </span>'+D.dt(t.de)+'</td>'+
+    '<td class="cl num'+(t.ate?'':' vz')+'"><span class="rot-m">Até </span>'+(t.ate?D.dt(t.ate):'<span class="fraco">—</span>')+'</td>'+
+    '<td class="cl'+(t.arquivo_nome?'':' vz')+'"><span class="rot-m">Arquivo </span>'+(t.arquivo_nome?esc(t.arquivo_nome):'<span class="fraco">—</span>')+'</td>'+
+    '<td class="cl'+(t.arquivo_local?'':' vz')+'"><span class="rot-m">Onde está </span>'+(t.arquivo_local==='sistema_antigo'?'Sistema antigo':(t.arquivo_local?'Sistema novo':'<span class="fraco">—</span>'))+'</td></tr>'});
   h+='</tbody></table></div>';
   var sem=d.sem_termo.filter(function(u){return !D.estado.unidade||u.id===D.estado.unidade});
   if(sem.length) h+='<section class="sec"><div class="sh"><h2>Unidades sem termo vigente</h2><span class="q">sem termo, a receita não tem quem assine</span></div><div class="cp"><span>'+sem.map(function(u){return esc(u.nome)}).join(', ')+'</span></div></section>';
@@ -176,7 +246,13 @@ M.telas.termos={render:function(){$('#tela').innerHTML=telaTermos()},abrir:funct
 M.rotas.push([/^receita\/([0-9a-f-]{36})$/i,function(m,sem){abrirFicha(m[1],sem)}]);
 M.cliques.push(function(b){
   if(b.dataset.rec){abrirFicha(b.dataset.rec);return true}
-  if(b.id==='rec-gerar'){abrirGerar();return true}
+  if(b.dataset.recUn){abrirGerar({mes:est.mes,unidades:[b.dataset.recUn]});return true}
+  if(b.id==='rec-gerar'){abrirGerar({mes:est.mes});return true}
+  if(b.id==='rec-gerar-marc'){abrirGerar({mes:est.mes,unidades:marcadas().map(function(r){return r.unidade_id})});return true}
+  if(b.id==='rec-desmarcar'){est.marc={};redesenha();return true}
+  if(b.id==='rec-limpar'){est.sit='';est.orig='';est.ass='';redesenha();return true}
+  if(b.id==='t-limpar'){est.tLab='';est.tReg='';$('#tela').innerHTML=telaTermos();return true}
+  if(b.id==='rec-recalc'){var rc=est.ficha.receita;abrirGerar({mes:rc.mes,unidades:[rc.unidade_id],receitaId:rc.id});return true}
   if(b.id==='rec-ajustar'){abrirAjustar();return true}
   if(b.id==='rec-pedido'){D.avisar('Criar pedido a partir da receita fica para a próxima etapa.');return true}
   if(b.id==='rec-st'){var para=b.dataset.para,txt=para==='gerada'?'Marcar a receita como gerada?':'Marcar como enviada ao RT? (o sistema não envia e-mail: só registra a data)';
@@ -186,9 +262,15 @@ M.cliques.push(function(b){
 });
 M.envios.push(function(e){if(e.target.id==='f-rec-gerar'){enviarGerar(e);return true}if(e.target.id==='f-rec-aj'){enviarAjustar(e);return true}return false});
 M.mudancas.push(function(t){
-  if(t.id==='rec-mes'){est.mes=t.value;carregarLista()}
-  else if(t.id==='rec-sit'){est.sit=t.value;$('#tela').innerHTML=telaLista()}
-  else if(t.id==='rg-mes'){est.gerar=null;var b=$('#rg-ok');if(b){b.disabled=false;b.textContent='Ver o que será feito'}$('#rg-prev').innerHTML=''}
+  if(t.id==='rec-mes'){est.mes=t.value;est.marc={};carregarLista()}
+  else if(t.id==='rec-sit'){est.sit=t.value;redesenha()}
+  else if(t.id==='rec-orig'){est.orig=t.value;redesenha()}
+  else if(t.id==='rec-ass'){est.ass=t.value;redesenha()}
+  else if(t.dataset&&t.dataset.recSel){est.marc[t.dataset.recSel]=t.checked;redesenha()}
+  else if(t.id==='rec-todas'){var mk=t.checked;[].forEach.call(document.querySelectorAll('input[data-rec-sel]'),function(i){est.marc[i.dataset.recSel]=mk});redesenha()}
+  else if(t.id==='t-lab'){est.tLab=t.value;$('#tela').innerHTML=telaTermos()}
+  else if(t.id==='t-reg'){est.tReg=t.value;$('#tela').innerHTML=telaTermos()}
+  else if(t.id==='rg-mes'||t.name==='rg-esc'||(t.dataset&&t.dataset.rgUn)){if(t.name==='rg-esc'){var lt=$('#rg-lista');if(lt)lt.hidden=t.value!=='escolhidas'}zeraPrevia()}
   else if(t.id==='aj-novo'&&t.value){var o=t.selectedOptions[0];$('#aj-corpo').insertAdjacentHTML('beforeend','<tr><td>'+esc(o.textContent)+'<span class="sub2">incluído no ajuste</span></td><td class="r"><input class="ent num aj-q" data-prod="'+esc(t.value)+'" inputmode="numeric" value="0"></td></tr>');o.remove();t.value=''}
 });
 document.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('tr.lp[data-rec]')){e.preventDefault();abrirFicha(e.target.dataset.rec)}});

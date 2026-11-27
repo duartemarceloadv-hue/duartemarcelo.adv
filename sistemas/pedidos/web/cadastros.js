@@ -4,7 +4,7 @@
 (function(){
 "use strict";
 var D=window.DH, M=D.MOD, $=function(s,r){return (r||document).querySelector(s)}, esc=D.esc;
-var est={uni:null,ubusca:'',pes:null,pbusca:'',ppapel:'',pend:null,pst:'abertas',fu:null,fp:null,op:null};
+var est={uni:null,ubusca:'',uSit:'',uUf:'',uRt:'',uTermo:'',pes:null,pbusca:'',ppapel:'',pSit:'',pReg:'',pend:null,pst:'abertas',fu:null,fp:null,op:null};
 var fmtCnpj=function(s){return String(s||'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')};
 var periodo=function(de,ate){return (de?D.dt(de):'início não informado')+(ate?' a '+D.dt(ate):' até hoje')};
 var nrm=function(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()};
@@ -18,19 +18,35 @@ var JUST='<label class="campo"><span>Justificativa <small>(obrigatória; fica no
 /* ---------- Unidades ---------- */
 function telaUnidades(){
   var d=est.uni, h=D.titulo('Unidades','',d?D.plural(d.unidades.length,'unidade','unidades')+' · cadastro comum a todos os módulos':'');
-  h+='<div class="filtros">'+D.campo('Buscar','<input class="busca" id="u-busca" type="search" placeholder="Nome, cidade ou CNPJ" value="'+esc(est.ubusca)+'">','c-busca')+'</div>';
+  var ufs=d?[...new Set(d.unidades.map(function(u){return u.uf}).filter(Boolean))].sort():[];
+  h+='<div class="filtros">'+D.campo('Buscar','<input class="busca" id="u-busca" type="search" placeholder="Nome, cidade ou CNPJ" value="'+esc(est.ubusca)+'">','c-busca')+
+    D.campo('Situação','<select class="sel" id="u-sit">'+D.opt('','Todas',est.uSit)+D.opt('ativa','Ativas',est.uSit)+D.opt('inativa','Inativas',est.uSit)+'</select>')+
+    D.campo('UF','<select class="sel" id="u-uf">'+D.opt('','Todas',est.uUf)+ufs.map(function(x){return D.opt(x,x,est.uUf)}).join('')+'</select>')+
+    D.campo('RT titular','<select class="sel" id="u-rt">'+D.opt('','Todas',est.uRt)+D.opt('com','Com RT titular',est.uRt)+D.opt('sem','Sem RT titular',est.uRt)+'</select>')+
+    D.campo('Termo (C. Paulista)','<select class="sel" id="u-termo">'+D.opt('','Todas',est.uTermo)+D.opt('com','Com termo',est.uTermo)+D.opt('sem','Sem termo',est.uTermo)+'</select>')+
+    ((est.uSit||est.uUf||est.uRt||est.uTermo)?'<button type="button" class="botao sec mini" id="u-limpar">Limpar filtros</button>':'')+'</div>';
   if(!d) return h+'<div class="tabela"><div class="vazio">Carregando as unidades…</div></div>';
   var q=nrm(est.ubusca).trim(), qd=q.replace(/\D/g,'');
-  var l=d.unidades.filter(function(u){return (!D.estado.unidade||u.id===D.estado.unidade)&&(!q||nrm(u.nome+' '+u.cidade+' '+u.uf).indexOf(q)>=0||(qd.length>3&&String(u.cnpj||'').indexOf(qd)>=0))});
-  h+='<div class="tabela cartoes"><table><thead><tr><th>Unidade</th><th>CNPJ vigente</th><th>RT titular</th><th>Sócio</th><th>Termo (C. Paulista)</th><th>Pendências</th></tr></thead><tbody>';
-  if(!l.length) h+='<tr><td colspan="6" class="vazio">Nenhuma unidade com essa busca.</td></tr>';
+  var l=d.unidades.filter(function(u){
+    if(est.uSit&&(est.uSit==='ativa')!==!!u.ativo) return false;
+    if(est.uUf&&u.uf!==est.uUf) return false;
+    if(est.uRt&&(est.uRt==='com')!==!!u.rt) return false;
+    if(est.uTermo&&(est.uTermo==='com')!==!!u.termo) return false;
+    return (!D.estado.unidade||u.id===D.estado.unidade)&&(!q||nrm(u.nome+' '+u.cidade+' '+u.uf).indexOf(q)>=0||(qd.length>3&&String(u.cnpj||'').indexOf(qd)>=0))});
+  h+='<div class="tabela cartoes"><table><thead><tr><th>Unidade</th><th>Cidade</th><th>UF</th><th>Situação</th><th>CNPJ vigente</th><th>RT titular</th><th class="r">Substitutas</th><th>Sócio</th><th>Termo desde</th><th class="r">Pendências</th></tr></thead><tbody>';
+  if(!l.length) h+='<tr><td colspan="10" class="vazio">Nenhuma unidade com esses filtros.</td></tr>';
   l.forEach(function(u){
-    h+='<tr class="lp" data-uni="'+esc(u.id)+'" tabindex="0"><td class="c1"><b>'+esc(u.nome)+'</b><span class="sub2">'+esc([u.cidade,u.uf].filter(Boolean).join('/'))+(u.ativo?'':' · inativa')+'</span></td>'+
+    var sub=Math.max(0,(u.n_rt||0)-(u.rt?1:0));
+    h+='<tr class="lp" data-uni="'+esc(u.id)+'" tabindex="0"><td class="c1"><b>'+esc(u.nome)+'</b></td>'+
+      '<td class="cl'+(u.cidade?'':' vz')+'"><span class="rot-m">Cidade </span>'+(u.cidade?esc(u.cidade):'<span class="fraco">—</span>')+'</td>'+
+      '<td class="cl'+(u.uf?'':' vz')+'"><span class="rot-m">UF </span>'+(u.uf?esc(u.uf):'<span class="fraco">—</span>')+'</td>'+
+      '<td class="c2">'+D.tag(u.ativo?['Ativa','s']:['Inativa','n'])+'</td>'+
       '<td class="cl num"><span class="rot-m">CNPJ </span>'+(u.cnpj?fmtCnpj(u.cnpj):'<span class="nao">sem CNPJ</span>')+'</td>'+
-      '<td class="cl"><span class="rot-m">RT </span>'+(u.rt?esc(u.rt):'<span class="nao">sem RT titular</span>')+(u.n_rt>1?'<span class="sub2">+'+(u.n_rt-1)+' substituta</span>':'')+'</td>'+
-      '<td class="cl"><span class="rot-m">Sócio </span>'+(u.socios?esc(u.socios):'<span class="fraco">—</span>')+'</td>'+
-      '<td class="cl"><span class="rot-m">Termo </span>'+(u.termo?'desde '+D.dt(u.termo):'<span class="nao">sem termo</span>')+'</td>'+
-      '<td class="c2">'+(u.pend?'<span class="selo a">'+u.pend+'</span>':'<span class="fraco">—</span>')+'</td></tr>';
+      '<td class="cl"><span class="rot-m">RT titular </span>'+(u.rt?esc(u.rt):'<span class="nao">sem RT titular</span>')+'</td>'+
+      '<td class="cl r num'+(sub?'':' vz')+'"><span class="rot-m">Substitutas </span>'+(sub||'<span class="fraco">—</span>')+'</td>'+
+      '<td class="cl'+(u.socios?'':' vz')+'"><span class="rot-m">Sócio </span>'+(u.socios?esc(u.socios):'<span class="fraco">—</span>')+'</td>'+
+      '<td class="cl num"><span class="rot-m">Termo desde </span>'+(u.termo?D.dt(u.termo):'<span class="nao">sem termo</span>')+'</td>'+
+      '<td class="cl r'+(u.pend?'':' vz')+'"><span class="rot-m">Pendências </span>'+(u.pend?'<span class="selo a">'+u.pend+'</span>':'<span class="fraco">—</span>')+'</td></tr>';
   });
   return h+'</tbody></table></div>';
 }
@@ -125,23 +141,30 @@ function buscarPessoa(q){
 function telaPessoas(){
   var d=est.pes, h=D.titulo('Pessoas','',d?D.plural(d.pessoas.filter(function(p){return !p.juntada}).length,'pessoa','pessoas')+' com função (RT, prescritor, sócio) · nenhuma junção automática por nome':'');
   h+='<div class="filtros">'+D.campo('Buscar','<input class="busca" id="p-busca" type="search" placeholder="Nome ou nº do registro" value="'+esc(est.pbusca)+'">','c-busca')+
-    D.campo('Função','<select class="sel" id="p-papel">'+[['','Todas'],['RT','RT vigente'],['Prescritor','Prescritor'],['Sócio','Sócio'],['pend','Com pendência'],['juntada','Juntadas a outra']].map(function(o){return D.opt(o[0],o[1],est.ppapel)}).join('')+'</select>')+'</div>';
+    D.campo('Função','<select class="sel" id="p-papel">'+[['','Todas'],['RT','RT vigente'],['Prescritor','Prescritor'],['Sócio','Sócio'],['pend','Com pendência'],['juntada','Juntadas a outra']].map(function(o){return D.opt(o[0],o[1],est.ppapel)}).join('')+'</select>')+
+    D.campo('Situação','<select class="sel" id="p-sit">'+D.opt('','Todas',est.pSit)+D.opt('ativa','Ativas',est.pSit)+D.opt('inativa','Inativas',est.pSit)+'</select>')+
+    D.campo('Registro no conselho','<select class="sel" id="p-reg">'+D.opt('','Todos',est.pReg)+D.opt('com','Com registro',est.pReg)+D.opt('sem','Sem registro',est.pReg)+'</select>')+
+    ((est.ppapel||est.pSit||est.pReg)?'<button type="button" class="botao sec mini" id="p-limpar">Limpar filtros</button>':'')+'</div>';
   if(!d) return h+'<div class="tabela"><div class="vazio">Carregando as pessoas…</div></div>';
   var q=nrm(est.pbusca).trim(), un=D.estado.unidade?D.nomeUnidade(D.estado.unidade):'';
   var l=d.pessoas.filter(function(p){
     if(est.ppapel==='juntada'){if(!p.juntada)return false}else if(p.juntada) return false;
     if(est.ppapel==='pend'&&!p.pend) return false;
     if(est.ppapel&&['RT','Prescritor','Sócio'].indexOf(est.ppapel)>=0&&p.papeis.indexOf(est.ppapel)<0) return false;
+    if(est.pSit&&(est.pSit==='ativa')!==!!p.ativo) return false;
+    if(est.pReg&&(est.pReg==='com')!==!!p.registros.length) return false;
     if(un&&p.unidades.indexOf(un)<0) return false;
     return !q||nrm(p.nome+' '+p.registros.join(' ')).indexOf(q)>=0});
-  h+='<div class="tabela cartoes"><table><thead><tr><th>Nome</th><th>Função</th><th>Registro no conselho</th><th>Onde atua</th><th>Pendências</th></tr></thead><tbody>';
-  if(!l.length) h+='<tr><td colspan="5" class="vazio">Ninguém com esses filtros.</td></tr>';
+  h+='<div class="tabela cartoes"><table><thead><tr><th>Nome</th><th>Situação</th><th>Função</th><th>Registro no conselho</th><th>Onde atua</th><th class="r">Pendências</th></tr></thead><tbody>';
+  if(!l.length) h+='<tr><td colspan="6" class="vazio">Ninguém com esses filtros.</td></tr>';
   l.slice(0,300).forEach(function(p){
-    h+='<tr class="lp" data-pes="'+esc(p.id)+'" tabindex="0"><td class="c1"><b>'+esc(p.nome)+'</b>'+(p.ativo?'':'<span class="sub2">inativa</span>')+'</td>'+
-      '<td class="cl"><span class="rot-m">Função </span>'+(p.papeis.join(', ')||'<span class="fraco">—</span>')+'</td>'+
+    h+='<tr class="lp" data-pes="'+esc(p.id)+'" tabindex="0"><td class="c1"><b>'+esc(p.nome)+'</b></td>'+
+      '<td class="c2">'+D.tag(p.juntada?['Juntada','n']:(p.ativo?['Ativa','s']:['Inativa','n']))+'</td>'+
+      '<td class="cl'+(p.papeis.length?'':' vz')+'"><span class="rot-m">Função </span>'+(esc(p.papeis.join(', '))||'<span class="fraco">—</span>')+'</td>'+
       '<td class="cl"><span class="rot-m">Registro </span>'+(p.registros.length?esc(p.registros.join(', ')):'<span class="fraco">não informado</span>')+'</td>'+
-      '<td class="cl"><span class="rot-m">Onde </span>'+(p.unidades.length?esc(p.unidades.join(', ')):'<span class="fraco">—</span>')+'</td>'+
-      '<td class="c2">'+(p.pend?'<span class="selo a">'+p.pend+'</span>':'<span class="fraco">—</span>')+'</td></tr>'});
+      '<td class="cl'+(p.unidades.length?'':' vz')+'"><span class="rot-m">Onde atua </span>'+(p.unidades.length?esc(p.unidades.join(', ')):'<span class="fraco">—</span>')+'</td>'+
+      '<td class="cl r'+(p.pend?'':' vz')+'"><span class="rot-m">Pendências </span>'+(p.pend?'<span class="selo a">'+p.pend+'</span>':'<span class="fraco">—</span>')+'</td></tr>'});
+  if(l.length>300) h+='<tr><td colspan="6" class="vazio">Mostrando 300 de '+l.length+'. Use a busca ou os filtros.</td></tr>';
   return h+'</tbody></table></div>';
 }
 async function carregarPessoas(){
@@ -267,12 +290,16 @@ M.cliques.push(function(b){
   if(b.dataset.uop){abrirOpUnidade(b.dataset.uop,b);return true}
   if(b.dataset.pop){abrirOpPessoa(b.dataset.pop,b);return true}
   if(b.dataset.pd){abrirDecisao(b);return true}
+  if(b.id==='u-limpar'){est.uSit='';est.uUf='';est.uRt='';est.uTermo='';$('#tela').innerHTML=telaUnidades();return true}
+  if(b.id==='p-limpar'){est.ppapel='';est.pSit='';est.pReg='';$('#tela').innerHTML=telaPessoas();return true}
   return false;
 });
 M.envios.push(function(e){var id=e.target.id;
   if(id==='f-cad-u'){enviarOpUnidade(e);return true} if(id==='f-cad-p'){enviarOpPessoa(e);return true} if(id==='f-cad-pd'){enviarDecisao(e);return true} return false});
 M.mudancas.push(function(t){
   if(t.id==='p-papel'){est.ppapel=t.value;$('#tela').innerHTML=telaPessoas()}
+  else if(t.id==='p-sit'||t.id==='p-reg'){est[t.id==='p-sit'?'pSit':'pReg']=t.value;$('#tela').innerHTML=telaPessoas()}
+  else if(['u-sit','u-uf','u-rt','u-termo'].indexOf(t.id)>=0){est[{'u-sit':'uSit','u-uf':'uUf','u-rt':'uRt','u-termo':'uTermo'}[t.id]]=t.value;$('#tela').innerHTML=telaUnidades()}
   else if(t.id==='pd-st'){est.pst=t.value;carregarPend()}
 });
 var tB;

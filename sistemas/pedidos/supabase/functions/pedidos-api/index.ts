@@ -310,11 +310,23 @@ async function aPedidos(c: Ctx, b: any) {
   const un = b.unidade_id ? uuid(b.unidade_id, "unidade") : "";
   const de = b.de ? dataValida(b.de, "data inicial") : "", ate = b.ate ? dataValida(b.ate, "data final") : "";
   const pag = String(b.pag || "");
+  // filtros por coluna: etapa na planilha do laboratório ("sem" = sem etapa), com/sem NF, atrasado sim/não
+  const etapa = String(b.etapa || "").slice(0, 80), comNf = String(b.nf || ""), atrasado = String(b.atrasado || "");
   const ordem = ORDEM[String(b.ordem || "urgencia")] || ORDEM.urgencia;
   if (esp && !FILTRO[esp]) throw new Erro(400, "Filtro desconhecido.");
   const uns: Record<string, string> = {};
   PED.forEach((p) => (uns[p.unidade_id] = p.un));
+  let temNf: Set<string> | null = null;
+  if (comNf === "com" || comNf === "sem") {
+    const r = await sql`select distinct np.pedido_id from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id where not n.cancelada`;
+    temNf = new Set(r.map((x) => x.pedido_id));
+  }
+  const etapas = [...new Set(PED.filter((p) => !un || p.unidade_id === un).map((p) => p.etapa).filter(Boolean))].sort((x, y) => x.localeCompare(y, "pt-BR"));
   const l = PED.filter((p) => {
+    if (etapa && (etapa === "sem" ? !!p.etapa : p.etapa !== etapa)) return false;
+    if (temNf && (comNf === "com") !== temNf.has(p.id)) return false;
+    if (atrasado === "sim" && !(p.atraso > 0)) return false;
+    if (atrasado === "nao" && p.atraso > 0) return false;
     if (esp && !FILTRO[esp](p)) return false;
     if (sit && p.sit !== sit) return false;
     if (lab && p.lab !== lab) return false;
@@ -345,7 +357,7 @@ async function aPedidos(c: Ctx, b: any) {
     for (const x of r) (nfs[x.pedido_id] ||= []).push(x.numero);
   }
   return {
-    hoje: HOJE, qtd: l.length, total: r2(l.reduce((t, p) => t + p.total, 0)),
+    hoje: HOJE, qtd: l.length, total: r2(l.reduce((t, p) => t + p.total, 0)), etapas,
     unidades: Object.entries(uns).map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
     itens: pagina.map((p) => linhaPedido(p, nfs)),
   };
@@ -848,7 +860,7 @@ Deno.serve(async (req) => {
     const c = await sessao(req);
     if (acao === "sessao") {
       return resp(200, { email: c.email, nome: c.nome, papel: c.papel, papeis: c.papeis, trocar_senha: c.trocar, precisa_mfa: c.precisaMfa, aal: c.aal, tem_fator: c.temFator,
-        pode_gravar: c.gravar, cadastros: c.cadastros, receitas: c.receitas, receitas_gravar: c.receitasGravar });
+        pode_gravar: c.gravar, cadastros: c.cadastros, receitas: c.receitas, receitas_gravar: c.receitasGravar, todas: c.todas });
     }
     if (acao === "trocar_senha") return resp(200, await aTrocarSenha(c, b));
     exigeLiberado(c);

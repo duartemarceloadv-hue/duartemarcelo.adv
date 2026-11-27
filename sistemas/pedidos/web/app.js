@@ -61,7 +61,7 @@ async function api(acao,dados,url){
 
 /* ---------- estado ---------- */
 var EU=null, HOJE=hojeLocal();
-var estado={tela:'inicio',busca:'',sit:'',lab:'',acao:false,especial:'',grupo:'',abertos:{},sel:{},pDe:'',pAte:'',pPag:'',pOrdem:'urgencia',gBusca:'',gLab:'',gForma:'',gDe:'',gAte:'',
+var estado={tela:'inicio',busca:'',sit:'',lab:'',acao:false,especial:'',grupo:'',abertos:{},sel:{},pDe:'',pAte:'',pPag:'',pOrdem:'urgencia',pEtapa:'',pNf:'',pAtraso:'',gBusca:'',gLab:'',gForma:'',gDe:'',gAte:'',gOmie:'',gPlan:'',gSis:'',
   unidade:'',fichaId:'',voltar:'pedidos'};
 var cache={inicio:null,pedidos:null,pag:null};
 var fichaAtual=null, UNIDADES=[];
@@ -257,18 +257,14 @@ function telaInicio(d){
 }
 
 /* ---------- Pedidos ---------- */
-function filtrosPedidos(){return {busca:estado.busca,sit:estado.sit,lab:estado.lab,so_acao:estado.acao,especial:estado.especial,unidade_id:estado.unidade,de:estado.pDe,ate:estado.pAte,pag:estado.pPag,ordem:estado.pOrdem}}
+function filtrosPedidos(){return {busca:estado.busca,sit:estado.sit,lab:estado.lab,so_acao:estado.acao,especial:estado.especial,unidade_id:estado.unidade,de:estado.pDe,ate:estado.pAte,pag:estado.pPag,ordem:estado.pOrdem,etapa:estado.pEtapa,nf:estado.pNf,atrasado:estado.pAtraso}}
 function opt(v,t,cur){return '<option value="'+esc(v)+'"'+(String(v)===String(cur||'')?' selected':'')+'>'+esc(t)+'</option>'}
 function campo(rot,html,cls){return '<label class="campo'+(cls?' '+cls:'')+'"><span>'+esc(rot)+'</span>'+html+'</label>'}
-function filtrosAtivos(){return !!(estado.sit||estado.lab||estado.acao||estado.pDe||estado.pAte||estado.pPag||estado.busca||estado.especial)}
-function resumoParc(x){
-  if(!x.n) return '<span class="fraco">sem parcelas</span>';
-  var h='<span class="num">'+x.ok+'/'+x.n+' finalizadas</span>';
-  if(x.venc) h+=' <span class="selo d">'+x.venc+' vencida'+(x.venc>1?'s':'')+'</span>';
-  if(x.pend) h+=' <span class="selo a">'+x.pend+' pend. de baixa</span>';
-  if(x.falta>0) h+='<span class="sub2">falta '+R(x.falta)+(x.prox?' · vence '+dt(x.prox).slice(0,5):'')+'</span>';
-  return h;
-}
+function filtrosAtivos(){return !!(estado.sit||estado.lab||estado.acao||estado.pDe||estado.pAte||estado.pPag||estado.busca||estado.especial||estado.pEtapa||estado.pNf||estado.pAtraso)}
+function limpaFiltrosPed(){estado.sit='';estado.lab='';estado.acao=false;estado.pDe='';estado.pAte='';estado.pPag='';estado.busca='';estado.especial='';estado.pEtapa='';estado.pNf='';estado.pAtraso=''}
+// etapa da planilha do laboratório vem em maiúsculas: mostra só a 1ª letra maiúscula
+function etapaTxt(e){e=String(e||'').toLowerCase();return e.charAt(0).toUpperCase()+e.slice(1)}
+
 var SIT_CURTA={E:'No laboratório',L:'Confirmado pelo lab.',C:'A caminho',R:'Recebido',X:'Cancelado',D:'Rascunho'};
 function telaPedidos(d){
   var comUn=!estado.unidade;
@@ -279,6 +275,9 @@ function telaPedidos(d){
    campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">','c-busca')+
    campo('Laboratório','<select class="sel" data-pf="lab">'+opt('','Todos',estado.lab)+opt('CP','Centro Paulista',estado.lab)+opt('INJ','Injemed',estado.lab)+'</select>')+
    campo('Situação','<select class="sel" data-pf="sit">'+opt('','Todas',estado.sit)+opt('E','No laboratório',estado.sit)+opt('L','Confirmado pelo lab.',estado.sit)+opt('C','A caminho',estado.sit)+opt('R','Recebidos',estado.sit)+opt('X','Cancelados',estado.sit)+'</select>')+
+   campo('Etapa no laboratório','<select class="sel" data-pf="pEtapa">'+opt('','Todas',estado.pEtapa)+opt('sem','Sem etapa informada',estado.pEtapa)+((d&&d.etapas)||(estado.pEtapa&&estado.pEtapa!=='sem'?[estado.pEtapa]:[])).map(function(e){return opt(e,etapaTxt(e),estado.pEtapa)}).join('')+'</select>')+
+   campo('Nota fiscal','<select class="sel" data-pf="pNf">'+opt('','Todos',estado.pNf)+opt('com','Com NF',estado.pNf)+opt('sem','Sem NF',estado.pNf)+'</select>')+
+   campo('Atraso','<select class="sel" data-pf="pAtraso">'+opt('','Todos',estado.pAtraso)+opt('sim','Atrasados',estado.pAtraso)+opt('nao','Sem atraso',estado.pAtraso)+'</select>')+
    campo('Pagamento','<select class="sel" data-pf="pPag">'+opt('','Todos',estado.pPag)+opt('V','Com parcela vencida',estado.pPag)+opt('aberto','Com parcela a pagar',estado.pPag)+opt('P','Falta baixa na Omie',estado.pPag)+opt('B','Falta baixa na planilha',estado.pPag)+opt('N','Falta nossa baixa',estado.pPag)+opt('sem','Sem parcelas',estado.pPag)+'</select>')+
    campo('Enviado de','<input class="sel" type="date" data-pf="pDe" value="'+esc(estado.pDe||'')+'">')+
    campo('até','<input class="sel" type="date" data-pf="pAte" value="'+esc(estado.pAte||'')+'">')+
@@ -287,19 +286,28 @@ function telaPedidos(d){
    (filtrosAtivos()?'<button type="button" class="botao sec mini" id="limpar-filtros">Limpar filtros</button>':'')+
    '</div>';
   if(!d) return h+'<div class="tabela"><div class="vazio">Carregando os pedidos…</div></div>';
-  h+='<div class="tabela cartoes"><table><thead><tr><th>Nº DH</th>'+(comUn?'<th>Unidade</th>':'')+'<th>Enviado</th><th>Prazo</th><th>Situação</th><th class="r">Total</th><th>Parcelas</th><th>Próxima ação</th></tr></thead><tbody>';
-  if(!d.itens.length) h+='<tr><td colspan="8" class="vazio">Nenhum pedido com esses filtros.</td></tr>';
+  // uma informação por coluna (para filtrar e ordenar): nada empilhado na mesma célula
+  var nc=comUn?13:12;
+  h+='<div class="tabela cartoes t12"><table><thead><tr><th>Nº DH</th>'+(comUn?'<th>Unidade</th>':'')+'<th>Lab.</th><th>Nº no lab.</th><th>NF</th><th>Enviado</th><th>Prazo</th><th class="r">Atraso</th><th>Situação</th><th>Etapa no lab.</th><th class="r">Total</th><th class="r">Falta pagar</th><th>Próxima ação</th></tr></thead><tbody>';
+  if(!d.itens.length) h+='<tr><td colspan="'+nc+'" class="vazio">Nenhum pedido com esses filtros.</td></tr>';
   d.itens.forEach(function(p){
-    var a=p.acoes[0], canc=p.sit==='X';
-    var prazo=p.rec?'<span class="fraco">recebido '+dt(p.rec)+'</span>':(p.atraso>0?'<b class="vermelho">'+dt(p.prazo)+'</b><span class="sub2 vermelho">+'+p.atraso+' dias</span>':(p.exp?'<span class="fraco">saiu '+dt(p.exp)+'</span>'+(p.diasCaminho?'<span class="sub2">há '+p.diasCaminho+' dias</span>':''):dt(p.prazo)));
+    var a=p.acoes[0], canc=p.sit==='X', aberto=!canc&&!p.rec;
+    var nf=p.nf.length?esc(p.nf.slice(0,2).join(', '))+(p.nf.length>2?' +'+(p.nf.length-2):''):'';
+    var et=p.etapa&&aberto?esc(etapaTxt(p.etapa)):'';
+    var falta=!canc&&p.parc.n&&p.parc.falta>0?R(p.parc.falta):'';
     h+='<tr class="lp'+(canc?' canc':'')+'" data-p="'+esc(p.id)+'" tabindex="0">'+
-     '<td class="c1"><b class="dh">'+esc(p.num)+'</b><span class="sub2">'+esc(p.lab==='CP'?'C. Paulista':p.labNome)+' '+esc(p.numLab||'—')+(p.nf.length?' · NF '+esc(p.nf.slice(0,2).join(', '))+(p.nf.length>2?' +'+(p.nf.length-2):''):'')+'</span></td>'+
-     (comUn?'<td class="cl">'+esc(p.un)+'</td>':'')+
-     '<td class="cl num"><span class="rot-m">Enviado </span>'+dt(p.env)+'</td>'+
-     '<td class="cl num"><span class="rot-m">Prazo </span>'+(canc?'—':prazo)+'</td>'+
-     '<td class="cl">'+tag([SIT_CURTA[p.sit]||'—',(SIT_P[p.sit]||SIT_P.E)[1]])+(p.etapa&&!p.rec&&!canc?'<span class="sub2">lab.: '+esc(p.etapa.toLowerCase())+'</span>':'')+'</td>'+
+     '<td class="c1"><b class="dh">'+esc(p.num)+'</b></td>'+
+     (comUn?'<td class="cl"><span class="rot-m">Unidade </span>'+esc(p.un)+'</td>':'')+
+     '<td class="cl"><span class="rot-m">Laboratório </span>'+esc(p.lab==='CP'?'C. Paulista':p.labNome)+'</td>'+
+     '<td class="cl num'+(p.numLab?'':' vz')+'"><span class="rot-m">Nº no laboratório </span>'+esc(p.numLab||'—')+'</td>'+
+     '<td class="cl num'+(nf?'':' vz')+'"><span class="rot-m">NF </span>'+(nf||'<span class="fraco">—</span>')+'</td>'+
+     '<td class="cl num'+(p.env?'':' vz')+'"><span class="rot-m">Enviado </span>'+dt(p.env)+'</td>'+
+     '<td class="cl num'+(aberto&&p.prazo?'':' vz')+'"><span class="rot-m">Prazo </span>'+(aberto&&p.prazo?(p.atraso>0?'<b class="vermelho">'+dt(p.prazo)+'</b>':dt(p.prazo)):'<span class="fraco">—</span>')+'</td>'+
+     '<td class="cl r num'+(aberto&&p.atraso>0?'':' vz')+'"><span class="rot-m">Dias de atraso </span>'+(aberto&&p.atraso>0?'<b class="vermelho">'+p.atraso+'</b>':'<span class="fraco">—</span>')+'</td>'+
+     '<td class="cl"><span class="rot-m">Situação </span>'+tag([SIT_CURTA[p.sit]||'—',(SIT_P[p.sit]||SIT_P.E)[1]])+'</td>'+
+     '<td class="cl'+(et?'':' vz')+'"><span class="rot-m">Etapa no laboratório </span>'+(et||'<span class="fraco">—</span>')+'</td>'+
      '<td class="c2 r num">'+(p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total))+'</td>'+
-     '<td class="cl">'+(canc?'—':resumoParc(p.parc))+'</td>'+
+     '<td class="cl r num'+(falta?'':' vz')+'"><span class="rot-m">Falta pagar </span>'+(falta||'<span class="fraco">—</span>')+'</td>'+
      '<td class="cl acao">'+(a?'<b style="--c:var('+a.cor+')">'+esc(a.txt)+'</b>'+(p.acoes.length>1?' <span class="fraco">+'+(p.acoes.length-1)+'</span>':''):'<span class="fraco">nada a fazer</span>')+'</td>'+
      '</tr>';
   });
@@ -333,7 +341,11 @@ var GRUPOS=[
   {id:'X',f:function(x){return x.sit==='X'}}];
 var GRUPO_TXT={V:'Venceram sem nenhuma das 3 baixas: Omie, planilha do laboratório e nosso sistema.',P:'A Omie do laboratório ainda não baixou. Sem a Omie o pagamento não finaliza.',N:'Omie e planilha já baixaram. Falta a nossa baixa: anexe o comprovante ou dê baixa sem comprovante (vale porque a Omie já baixou).',B:'A Omie já baixou, mas a planilha do laboratório não. Pendência de informação: pedir ao laboratório atualizar.',A:'Vencimento mais distante.',Q:'Finalizadas: Omie, planilha e nosso sistema baixados.',X:'Canceladas, não precisam ser pagas.'};
 function selecionadas(){var d=cache.pag;if(!d)return [];return d.parcelas.filter(function(x){return estado.sel[x.id]})}
-function nossaTxt(x){return x.nossa?'<span class="ok">'+(x.pago>=x.valor-0.01?'comprovante'+(x.pagoEm?' '+dt(x.pagoEm):''):'sem comprovante '+dt(x.bSis))+'</span>':(x.pago?'<span class="fraco">parcial '+R(x.pago)+'</span>':'<span class="nao">falta</span>')}
+// nossa baixa em duas colunas: data da baixa no sistema e se tem comprovante
+function comComp(x){return x.nossa&&x.pago>=x.valor-0.01}
+function nossaData(x){return x.nossa?'<span class="ok">'+dt(comComp(x)?(x.pagoEm||x.bSis):x.bSis)+'</span>':'<span class="nao">falta</span>'}
+function compTxt(x){return comComp(x)?'Com comprovante':(x.nossa?'Sem comprovante':(x.pago?'Pagamento parcial':'—'))}
+function filtraBaixa(f,d,exige){return !f||(f==='na'?exige===false:(exige!==false&&(f==='feita')===!!d))}
 function telaPagamentos(d){
   if(!d) return titulo('Pagamentos','','Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.')+'<p class="vazio">Carregando as parcelas…</p>';
   var bq=(estado.gBusca||'').trim().toLowerCase(), comUn=!estado.unidade;
@@ -344,6 +356,8 @@ function telaPagamentos(d){
     if(estado.gDe&&x.venc<estado.gDe) return false;
     if(estado.gAte&&x.venc>estado.gAte) return false;
     if(bq&&(x.num+' '+(x.numLab||'')+' '+x.un).toLowerCase().indexOf(bq)<0) return false;
+    if(!filtraBaixa(estado.gOmie,x.bOmie,x.exOmie)||!filtraBaixa(estado.gPlan,x.bPlan,x.exPlan)) return false;
+    if(estado.gSis&&(estado.gSis==='falta'?x.nossa:(!x.nossa||(estado.gSis==='comp')!==comComp(x)))) return false;
     return true});
   var pode=d.pode_gravar;
   var h=titulo('Pagamentos','','Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito'+(escopoTxt()?' ('+escopoTxt()+')':'')+'.'+(pode?' Marque as parcelas pagas com o mesmo comprovante e clique em “Anexar comprovante”.':''))+
@@ -351,9 +365,12 @@ function telaPagamentos(d){
    campo('Buscar','<input class="busca" id="g-busca" type="search" placeholder="Nº DH, nº do laboratório ou unidade" value="'+esc(estado.gBusca)+'">','c-busca')+
    campo('Laboratório','<select class="sel" data-gf="gLab">'+opt('','Todos',estado.gLab)+opt('CP','Centro Paulista',estado.gLab)+opt('INJ','Injemed',estado.gLab)+'</select>')+
    campo('Forma','<select class="sel" data-gf="gForma">'+opt('','Todas',estado.gForma)+opt('boleto','Boleto',estado.gForma)+opt('pix','PIX',estado.gForma)+opt('cartao','Cartão',estado.gForma)+opt('outro','Outra',estado.gForma)+'</select>')+
+   campo('Baixa na Omie','<select class="sel" data-gf="gOmie">'+opt('','Todas',estado.gOmie)+opt('feita','Feita',estado.gOmie)+opt('falta','Falta',estado.gOmie)+opt('na','Não se aplica',estado.gOmie)+'</select>')+
+   campo('Baixa na planilha','<select class="sel" data-gf="gPlan">'+opt('','Todas',estado.gPlan)+opt('feita','Feita',estado.gPlan)+opt('falta','Falta',estado.gPlan)+opt('na','Não se aplica',estado.gPlan)+'</select>')+
+   campo('Nossa baixa','<select class="sel" data-gf="gSis">'+opt('','Todas',estado.gSis)+opt('comp','Com comprovante',estado.gSis)+opt('semcomp','Sem comprovante',estado.gSis)+opt('falta','Falta',estado.gSis)+'</select>')+
    campo('Vence de','<input class="sel" type="date" data-gf="gDe" value="'+esc(estado.gDe)+'">')+
    campo('até','<input class="sel" type="date" data-gf="gAte" value="'+esc(estado.gAte)+'">')+
-   ((estado.gLab||estado.gForma||estado.gDe||estado.gAte||estado.gBusca)?'<button type="button" class="botao sec mini" id="limpar-g">Limpar filtros</button>':'')+
+   ((estado.gLab||estado.gForma||estado.gDe||estado.gAte||estado.gBusca||estado.gOmie||estado.gPlan||estado.gSis)?'<button type="button" class="botao sec mini" id="limpar-g">Limpar filtros</button>':'')+
    '<span class="contagem">'+plural(base.length,'parcela','parcelas')+' · '+R(base.reduce(function(t,x){return t+x.valor},0))+'</span></div>';
   GRUPOS.forEach(function(g){
     var s=SIT_PC[g.id]||SIT_PC.A;
@@ -369,15 +386,21 @@ function telaPagamentos(d){
       h+='<div class="gp-corpo">';
       if(g.cob) h+='<div class="gp-acoes">'+(estado.unidade?'<button type="button" class="botao mini" data-cob-un="'+esc(estado.unidade)+'">Gerar mensagem ao laboratório desta unidade</button><span>Pede a baixa na Omie e/ou na planilha, com datas e valores. Nada é enviado.</span>':'<span>Para gerar a mensagem ao laboratório, escolha a unidade no alto da tela (ou abra um pedido).</span>')+'</div>';
       if(g.sel&&pode) h+='<div class="gp-acoes"><span>Marque as parcelas pagas com um mesmo comprovante (todas da mesma unidade).</span></div>';
-      h+='<div class="tabela sem-borda cartoes com-sel"><table><thead><tr><th class="sel-c"></th><th>Nº DH / parcela</th>'+(comUn?'<th>Unidade</th>':'')+'<th>Vencimento</th><th class="r">Valor</th><th>Baixas: Omie · planilha · sistema</th><th>Forma</th></tr></thead><tbody>';
+      h+='<div class="tabela sem-borda cartoes com-sel t12"><table><thead><tr><th class="sel-c"></th><th>Nº DH</th><th>Parcela</th>'+(comUn?'<th>Unidade</th>':'')+'<th>Lab.</th><th>Vencimento</th><th class="r">Atraso</th><th class="r">Valor</th><th>Baixa Omie</th><th>Baixa planilha</th><th>Nossa baixa</th><th>Comprovante</th><th>Forma</th></tr></thead><tbody>';
       l.slice(0,lim).forEach(function(x){
-        var marcavel=g.sel&&pode&&x.livre>0;
+        var marcavel=g.sel&&pode&&x.livre>0, ct=compTxt(x);
         h+='<tr class="lp" data-p="'+esc(x.pedido_id)+'" tabindex="0"><td class="sel-c">'+(marcavel?'<input type="checkbox" data-selp="'+esc(x.id)+'" aria-label="Marcar parcela '+x.n+'/'+x.de+' do pedido '+esc(x.num)+'"'+(estado.sel[x.id]?' checked':'')+'>':'')+'</td>'+
-         '<td class="c1"><b class="dh">'+esc(x.num)+'</b><span class="sub2">parcela '+x.n+'/'+x.de+' · '+esc(x.lab==='CP'?'C. Paulista':x.labNome)+' '+esc(x.numLab||'—')+'</span></td>'+
-         (comUn?'<td class="cl">'+esc(x.un)+'</td>':'')+
-         '<td class="cl num"><span class="rot-m">Vence </span>'+dt(x.venc)+(x.atrasoDias>0?'<span class="sub2 vermelho">há '+x.atrasoDias+' dias</span>':'')+'</td>'+
+         '<td class="c1"><b class="dh">'+esc(x.num)+'</b></td>'+
+         '<td class="cl num"><span class="rot-m">Parcela </span>'+x.n+'/'+x.de+'</td>'+
+         (comUn?'<td class="cl"><span class="rot-m">Unidade </span>'+esc(x.un)+'</td>':'')+
+         '<td class="cl"><span class="rot-m">Laboratório </span>'+esc(x.lab==='CP'?'C. Paulista':x.labNome)+'</td>'+
+         '<td class="cl num"><span class="rot-m">Vence </span>'+dt(x.venc)+'</td>'+
+         '<td class="cl r num'+(x.atrasoDias>0?'':' vz')+'"><span class="rot-m">Dias de atraso </span>'+(x.atrasoDias>0?'<b class="vermelho">'+x.atrasoDias+'</b>':'<span class="fraco">—</span>')+'</td>'+
          '<td class="c2 r num"><b>'+R(x.valor)+'</b></td>'+
-         '<td class="cl"><span class="baixas"><span>Omie: '+marca(x.bOmie,x.exOmie)+'</span><span>Planilha: '+marca(x.bPlan,x.exPlan)+'</span><span>Sistema: '+nossaTxt(x)+'</span></span></td>'+
+         '<td class="cl"><span class="rot-m">Baixa na Omie </span>'+marca(x.bOmie,x.exOmie)+'</td>'+
+         '<td class="cl"><span class="rot-m">Baixa na planilha </span>'+marca(x.bPlan,x.exPlan)+'</td>'+
+         '<td class="cl"><span class="rot-m">Nossa baixa </span>'+nossaData(x)+'</td>'+
+         '<td class="cl'+(ct==='—'?' vz':'')+'"><span class="rot-m">Comprovante </span>'+(ct==='—'?'<span class="fraco">—</span>':esc(ct))+'</td>'+
          '<td class="cl"><span class="rot-m">Forma </span>'+esc(FORMA[x.forma]||x.forma)+'</td></tr>';
       });
       h+='</tbody></table></div>';
@@ -887,13 +910,13 @@ document.addEventListener('click',function(e){
   if(b.id==='limpar-sel'){estado.sel={};render();return}
   if(b.id==='novo'){avisar('Novo pedido ainda não faz parte desta versão. Vem na próxima etapa.');return}
   if(b.dataset.card){var c=b.dataset.card.split(':');
-    if(c[0]==='pedidos'){estado.especial=c[1];estado.sit='';estado.lab='';estado.acao=false;estado.busca='';ir('pedidos')}
+    if(c[0]==='pedidos'){limpaFiltrosPed();estado.especial=c[1];ir('pedidos')}
     else{estado.grupo=c[1];estado.abertos={};ir('pagamentos')}
     return}
-  if(b.dataset.sit&&b.classList.contains('barra')){estado.especial='';estado.sit=b.dataset.sit;estado.lab='';estado.acao=false;ir('pedidos');return}
+  if(b.dataset.sit&&b.classList.contains('barra')){limpaFiltrosPed();estado.sit=b.dataset.sit;ir('pedidos');return}
   if(b.dataset.f==='esp'){estado.especial='';cache.pedidos=null;render();carregarPedidos();return}
-  if(b.id==='limpar-filtros'){estado.sit='';estado.lab='';estado.acao=false;estado.pDe='';estado.pAte='';estado.pPag='';estado.busca='';estado.especial='';cache.pedidos=null;render();carregarPedidos();return}
-  if(b.id==='limpar-g'){estado.gLab='';estado.gForma='';estado.gDe='';estado.gAte='';estado.gBusca='';render();return}
+  if(b.id==='limpar-filtros'){limpaFiltrosPed();cache.pedidos=null;render();carregarPedidos();return}
+  if(b.id==='limpar-g'){estado.gLab='';estado.gForma='';estado.gDe='';estado.gAte='';estado.gBusca='';estado.gOmie='';estado.gPlan='';estado.gSis='';render();return}
   if(b.id==='maisPed'){b.disabled=true;b.textContent='Carregando…';carregarPedidos(true);return}
   if(b.dataset.g){var id=b.dataset.g;var cur=b.getAttribute('aria-expanded')==='true';estado.abertos[id]=!cur;render();return}
   if(b.dataset.mais){estado.abertos['lim'+b.dataset.mais]=(estado.abertos['lim'+b.dataset.mais]||25)+50;render();return}
