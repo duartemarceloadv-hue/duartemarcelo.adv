@@ -34,4 +34,5 @@ Contexto: Dr. Hair, rede de clínicas capilares (53 unidades hoje, rumo a 60+). 
 
 ## DECISÃO DO DONO (27/11, durante o conselho global) — vale acima de qualquer proposta
 - A PREMIAÇÃO FICA FORA do sistema de operações. É um sistema à parte, com regras próprias, e a política ainda vai ser criada antes. Não desenhar a Premiação como módulo do sistema único.
+- O dono pediu DEBATE, não concordância: o conselho deve apresentar com honestidade os prós e contras de deixar a Premiação fora (ex.: segundo login para sócios, cadastro de pessoas duplicado, aprovações do sócio em dois lugares) e, se houver, o contra-argumento e uma alternativa. A decisão final é do dono.
 - O que ainda pode ser avaliado (como sugestão, não como módulo): a Premiação apenas LER os cadastros comuns do núcleo (unidades, pessoas) para não duplicar dados, e eventualmente avisar pendências na tela inicial por link. Nada além disso.
