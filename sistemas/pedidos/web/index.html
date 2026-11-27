@@ -15,13 +15,24 @@
   <aside class="menu" id="menu" aria-label="Menu principal" hidden>
     <div class="logo"><span class="mk" aria-hidden="true">DH</span><span>Operações Dr. Hair</span></div>
     <nav>
-      <a class="mi on" href="#inicio" data-ir="inicio" title="Laboratórios">
+      <a class="mi on" href="#inicio" data-ir="inicio" data-grupo="lab" title="Laboratórios">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/></svg>
         <span class="tx">Laboratórios</span>
       </a>
       <div class="sub">
         <a href="#pedidos" data-ir="pedidos">Pedidos</a>
         <a href="#pagamentos" data-ir="pagamentos">Pagamentos</a>
+        <a href="#receitas" data-ir="receitas" data-acesso="receitas" hidden>Receitas do mês</a>
+        <a href="#termos" data-ir="termos" data-acesso="receitas" hidden>Termos</a>
+      </div>
+      <a class="mi" href="#unidades" data-ir="unidades" data-grupo="cad" data-acesso="cadastros" title="Cadastros" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7.5 18a4.5 4.5 0 0 1 9 0"/></svg>
+        <span class="tx">Cadastros</span>
+      </a>
+      <div class="sub" data-acesso="cadastros" hidden>
+        <a href="#unidades" data-ir="unidades">Unidades</a>
+        <a href="#pessoas" data-ir="pessoas">Pessoas</a>
+        <a href="#pendencias" data-ir="pendencias">Pendências de cadastro</a>
       </div>
     </nav>
     <div class="rod">Ambiente de teste</div>
@@ -42,6 +53,8 @@
   <a href="#inicio" data-ir="inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>Início</a>
   <a href="#pedidos" data-ir="pedidos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Pedidos</a>
   <a href="#pagamentos" data-ir="pagamentos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg>Pagamentos</a>
+  <a href="#receitas" data-ir="receitas" data-acesso="receitas" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></svg>Receitas</a>
+  <a href="#unidades" data-ir="unidades" data-grupo="cad" data-acesso="cadastros" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7.5 18a4.5 4.5 0 0 1 9 0"/></svg>Cadastros</a>
 </nav>
 <div class="dlg-fundo" id="dlg-fundo"></div>
 <div class="dlg-caixa" id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-titulo"></div>
@@ -49,5 +62,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="app.js"></script>
+<script src="receitas.js"></script>
+<script src="cadastros.js"></script>
 </body>
 </html>

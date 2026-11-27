@@ -3,7 +3,8 @@
 -- Banco único xqxjmeioodmdhxhivyqu. Documento-mestre §4 (Arquitetura) e §7 (Perfis).
 --
 -- Regras:
---  * unidade com número próprio que nunca muda (mesmos UUIDs de pedidos_novo.unidade);
+--  * unidade com número próprio que nunca muda: o MESMO uuid de public.unidades (desenho global §3.1),
+--    com a equivalência dos ids do Laboratórios em nucleo.unidade_ref;
 --    o CNPJ fica num vínculo com início e fim (unidade_empresa);
 --  * pessoa = pessoa física, id interno; CPF/CNPJ em pessoa_documento_fiscal (com vigência);
 --    registro no conselho em profissional; RT e sócio são funções com período;
@@ -98,8 +99,9 @@ language plpgsql set search_path = '' as $$ begin raise exception 'O registro de
 create trigger evento_imutavel before update or delete on nucleo.evento for each row execute function nucleo.bloqueia();
 
 -- ---------- unidades e empresas ----------
+-- id = o MESMO uuid de public.unidades (desenho global §3.1); public.unidades não é alterada.
 create table nucleo.unidade (
-  id             uuid primary key default gen_random_uuid(),   -- número próprio; nunca muda
+  id             uuid primary key default gen_random_uuid(),   -- número próprio; nunca muda (= public.unidades.id)
   doc_unidade_id uuid unique,                                  -- id em public.unidades (sistema Documentos); só leitura
   nome           text not null unique,
   cidade         text,
@@ -110,6 +112,15 @@ create table nucleo.unidade (
   criado_em      timestamptz not null default now(),
   atualizado_em  timestamptz not null default now()
 );
+
+-- equivalência com os ids de cada sistema (pedidos_novo, premiacao, compras, nutra, zuria...)
+create table nucleo.unidade_ref (
+  sistema    text not null,
+  ref        text not null,
+  unidade_id uuid not null references nucleo.unidade(id),
+  primary key (sistema, ref)
+);
+create index on nucleo.unidade_ref (unidade_id);
 
 create table nucleo.unidade_apelido (
   id          uuid primary key default gen_random_uuid(),
@@ -318,7 +329,7 @@ create trigger t_atualizado before update on nucleo.usuario  for each row execut
 do $$
 declare t text;
 begin
-  foreach t in array array['unidade','unidade_apelido','empresa','unidade_empresa','pessoa','pessoa_origem','pessoa_documento_fiscal',
+  foreach t in array array['unidade','unidade_ref','unidade_apelido','empresa','unidade_empresa','pessoa','pessoa_origem','pessoa_documento_fiscal',
                            'profissional','prescritor_unidade','unidade_rt','socio_unidade','usuario','usuario_papel','pendencia_cadastro']
   loop
     execute format('create trigger t_audita after insert or update or delete on nucleo.%I for each row execute function nucleo.audita()', t);
@@ -347,31 +358,35 @@ select set_config('request.jwt.claims', '{"email":"carga-inicial-nucleo"}', fals
 select set_config('nucleo.origem', 'carga', false);
 select set_config('nucleo.justificativa', 'Carga inicial do núcleo (27/11/2026) a partir do Laboratórios e do arquivo do sistema antigo', false);
 
--- unidades (mesmos UUIDs), apelidos, empresas e vínculo de CNPJ
+-- unidades (uuid de public.unidades, que já estava em pedidos_novo.unidade.doc_unidade_id: 53/53),
+-- equivalência com os ids do Laboratórios, apelidos, empresas e vínculo de CNPJ
 insert into nucleo.unidade (id, doc_unidade_id, nome, cidade, uf, ativo, abertura, criado_em, atualizado_em)
-select u.id, u.doc_unidade_id, u.nome, u.cidade, u.uf, u.ativo,
+select u.doc_unidade_id, u.doc_unidade_id, u.nome, u.cidade, u.uf, u.ativo,
        (select (d.data->>'abertura')::date from pedidos_novo.unidade_cnpj c join pedidos_novo.legado_doc d
           on d.col = 'clinicas' and regexp_replace(d.data->>'cnpj', '\D', '', 'g') = c.cnpj
         where c.unidade_id = u.id and d.data->>'abertura' ~ '^\d{4}-\d{2}-\d{2}$' limit 1),
        u.criado_em, u.atualizado_em
 from pedidos_novo.unidade u;
 
+insert into nucleo.unidade_ref (sistema, ref, unidade_id)
+select 'pedidos_novo.unidade', u.id::text, u.doc_unidade_id from pedidos_novo.unidade u;
+
 insert into nucleo.unidade_apelido (id, unidade_id, nome, sistema)
-select id, unidade_id, nome, sistema from pedidos_novo.unidade_alias;
+select a.id, u.doc_unidade_id, a.nome, a.sistema from pedidos_novo.unidade_alias a join pedidos_novo.unidade u on u.id = a.unidade_id;
 
 insert into nucleo.empresa (razao_social, cnpj)
 select distinct on (cnpj) razao_social, cnpj from pedidos_novo.unidade_cnpj order by cnpj, de desc;
 
 -- 2000-01-01 era marcador de "sem data" na carga do Laboratórios: vira nulo (início não informado)
 insert into nucleo.unidade_empresa (id, unidade_id, empresa_id, de, ate)
-select c.id, c.unidade_id, e.id, nullif(c.de, '2000-01-01'::date), c.ate
-from pedidos_novo.unidade_cnpj c join nucleo.empresa e on e.cnpj = c.cnpj;
+select c.id, u.doc_unidade_id, e.id, nullif(c.de, '2000-01-01'::date), c.ate
+from pedidos_novo.unidade_cnpj c join nucleo.empresa e on e.cnpj = c.cnpj join pedidos_novo.unidade u on u.id = c.unidade_id;
 
 -- usuários e papéis (o Laboratórios tinha papel único + lista de unidades)
 insert into nucleo.usuario (email, nome, ativo, criado_em, atualizado_em)
 select email, nome, ativo, criado_em, atualizado_em from pedidos_novo.usuario;
 insert into nucleo.usuario_papel (email, papel, modulo, unidade_id)
-select u.email, u.papel, 'laboratorios', un from pedidos_novo.usuario u
+select u.email, u.papel, 'laboratorios', (select x.doc_unidade_id from pedidos_novo.unidade x where x.id = un) from pedidos_novo.usuario u
   left join lateral unnest(case when cardinality(u.unidades) > 0 then u.unidades else array[null::uuid] end) un on true;
 
 -- ---------- pessoas, profissionais, RTs, sócios ----------
@@ -381,8 +396,9 @@ declare
 begin
   -- mapa clínica do sistema antigo → unidade (pelo CNPJ, que bate 53/53)
   create temp table m_cli on commit drop as
-    select d.id cli, d.data->>'nome' cli_nome, c.unidade_id, d.data
-    from pedidos_novo.legado_doc d join pedidos_novo.unidade_cnpj c on c.cnpj = regexp_replace(d.data->>'cnpj', '\D', '', 'g')
+    select d.id cli, d.data->>'nome' cli_nome, ue.unidade_id, d.data
+    from pedidos_novo.legado_doc d join nucleo.empresa e on e.cnpj = regexp_replace(d.data->>'cnpj', '\D', '', 'g')
+    join nucleo.unidade_empresa ue on ue.empresa_id = e.id and ue.ate is null
     where d.col = 'clinicas';
 
   -- todas as menções a pessoas, na ordem em que serão lidas
@@ -406,8 +422,9 @@ begin
            nullif(m.data->'docs'->'termo-de-responsabilidade-no-laboratorio-centro-paulista'->>'emissao', '')::date, true, true, '{}'
     from m_cli m where coalesce(btrim(m.data->>'rtTermo'), '') <> '' order by m.cli;
   insert into fonte (sistema, ref, nome, reg_txt, unidade_id, prescreve, ativo, apelidos)
-    select 'pedidos-antigo:inj_unidades.rt', t.chave, btrim(t.linha->'dados'->'rt'->>'nome'), t.linha->'dados'->'rt'->>'crbm', c.unidade_id, true, true, '{}'
-    from pedidos_novo.legado_tabela t left join pedidos_novo.unidade_cnpj c on c.cnpj = regexp_replace(t.linha->>'cnpj', '\D', '', 'g')
+    select 'pedidos-antigo:inj_unidades.rt', t.chave, btrim(t.linha->'dados'->'rt'->>'nome'), t.linha->'dados'->'rt'->>'crbm', ue.unidade_id, true, true, '{}'
+    from pedidos_novo.legado_tabela t left join nucleo.empresa e on e.cnpj = regexp_replace(t.linha->>'cnpj', '\D', '', 'g')
+    left join nucleo.unidade_empresa ue on ue.empresa_id = e.id and ue.ate is null
     where t.tabela = 'inj_unidades' and coalesce(btrim(t.linha->'dados'->'rt'->>'nome'), '') <> '' order by t.chave;
 
   -- 1) pessoas: junta só quando conselho + registro são iguais (UF igual ou ausente em um dos lados)
@@ -495,13 +512,14 @@ begin
     values (r.unidade_id, r.pessoa_id, tit, r.de, r.ate, nullif(r.vinculo, ''), nullif(r.cargo, ''), r.sistema);
   end loop;
 
-  -- 4) sócios: um cadastro por nome distinto do campo "sócio" do antigo (só o primeiro nome, como está na fonte);
+  -- 4) sócios: o antigo só tem o primeiro nome, sem documento. Casamento nunca é por nome (desenho global §3.1):
+  --    um cadastro por unidade; os nomes iguais viram "possível duplicada" para Operações juntar.
   --    "Crescimentum" é empresa, sem CNPJ na fonte: vira pendência
-  for r in select distinct btrim(m.data->>'socio') nome from m_cli m where coalesce(btrim(m.data->>'socio'), '') <> '' and m.data->>'socio' !~* 'crescimentum' order by 1 loop
+  for r in select m.cli, m.unidade_id, btrim(m.data->>'socio') nome from m_cli m
+           where coalesce(btrim(m.data->>'socio'), '') <> '' and m.data->>'socio' !~* 'crescimentum' order by m.cli loop
     insert into nucleo.pessoa (nome) values (r.nome) returning id into pid;
-    insert into nucleo.pessoa_origem (pessoa_id, sistema, ref, nome_fonte) values (pid, 'pedidos-antigo:clinicas.socio', r.nome, r.nome);
-    insert into nucleo.socio_unidade (unidade_id, pessoa_id, fonte)
-    select m.unidade_id, pid, 'pedidos-antigo:clinicas.socio' from m_cli m where btrim(m.data->>'socio') = r.nome;
+    insert into nucleo.pessoa_origem (pessoa_id, sistema, ref, nome_fonte) values (pid, 'pedidos-antigo:clinicas.socio', r.cli, r.nome);
+    insert into nucleo.socio_unidade (unidade_id, pessoa_id, fonte) values (r.unidade_id, pid, 'pedidos-antigo:clinicas.socio');
   end loop;
   insert into nucleo.pendencia_cadastro (tipo, descricao, unidade_id, dados)
   select 'socio_empresa', 'Sócio informado como empresa (' || btrim(m.data->>'socio') || '), sem CNPJ no sistema antigo: cadastrar a empresa e as pessoas sócias', m.unidade_id,

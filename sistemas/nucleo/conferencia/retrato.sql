@@ -34,11 +34,15 @@ select json_build_object(
   'contagens', (select json_object_agg(t, n order by t) from c),
   'pedidos_total_rs', (select sum(total) from pedidos_novo.v_pedido),
   'pedidos_por_situacao', (select json_object_agg(situacao, json_build_array(n, v)) from (select situacao, count(*) n, sum(total) v from pedidos_novo.v_pedido group by 1) x),
-  'pedidos_por_unidade_hash', (select md5(string_agg(unidade_id::text||':'||n||':'||v, ',' order by unidade_id)) from (select unidade_id, count(*) n, sum(total) v from pedidos_novo.v_pedido group by 1) x),
+  -- por unidade, pelo NOME (os ids das unidades mudam para o uuid de public.unidades na etapa 2)
+  'pedidos_por_unidade_hash', (select md5(string_agg(nome||':'||n||':'||v, ',' order by nome)) from (select u.nome, count(*) n, sum(p.total) v from pedidos_novo.v_pedido p join pedidos_novo.unidade u on u.id = p.unidade_id group by 1) x),
   'parcelas_total_rs', (select sum(valor) from pedidos_novo.parcela),
   'parcelas_por_situacao', (select json_object_agg(situacao, json_build_array(n, v)) from (select situacao, count(*) n, sum(valor) v from pedidos_novo.v_parcela group by 1) x),
   'pagamentos_total_rs', (select sum(valor) from pedidos_novo.pagamento),
   'pagamento_parcela_rs', (select sum(valor) from pedidos_novo.pagamento_parcela),
-  'pagamentos_por_unidade_hash', (select md5(string_agg(unidade_id::text||':'||v, ',' order by unidade_id)) from (select unidade_id, sum(valor) v from pedidos_novo.pagamento group by 1) x),
-  'evento_ate_agora', (select count(*) from pedidos_novo.evento)
+  'pagamentos_por_unidade_hash', (select md5(string_agg(nome||':'||v, ',' order by nome)) from (select u.nome, sum(g.valor) v from pedidos_novo.pagamento g join pedidos_novo.unidade u on u.id = g.unidade_id group by 1) x),
+  'parcelas_por_unidade_hash', (select md5(string_agg(nome||':'||n||':'||v, ',' order by nome)) from (select u.nome, count(*) n, sum(x.valor) v from pedidos_novo.v_parcela x join pedidos_novo.pedido p on p.id = x.pedido_id join pedidos_novo.unidade u on u.id = p.unidade_id group by 1) x),
+  'evento_ate_agora', (select count(*) from pedidos_novo.evento),
+  -- ids, atualizado_em e nº DH dos pedidos: a troca de chave da unidade não pode mexer neles
+  'pedido_atualizado_hash', (select md5(string_agg(id::text||atualizado_em::text||coalesce(num_interno,''), ',' order by id)) from pedidos_novo.pedido)
 ) retrato;

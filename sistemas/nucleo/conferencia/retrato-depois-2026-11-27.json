@@ -1,0 +1,10 @@
+{"tirado_em":"2026-11-27 10:21:42 UTC, logo depois da migration pedidos_novo 0012_usa_nucleo",
+"contagens":{"arquivo":1152,"etapa_lab":320,"execucao_conector":7,"laboratorio":2,"legado_doc":1033,"legado_log":6178,"legado_tabela":76,"nota_fiscal":377,"nota_item":1599,"nota_pedido":382,"pagamento":83,"pagamento_parcela":89,"parcela":541,"pedido":484,"pedido_arquivo":1152,"pedido_item":1805,"pedido_receita":0,"pendencia":0,"pessoa":135,"preco":20,"produto":17,"receita":0,"receita_item":0,"termo":0,"unidade":53,"unidade_alias":71,"unidade_cnpj":53,"usuario":2},
+"pedidos_total_rs":5248612.23,"pedidos_por_situacao":{"enviado_ao_laboratorio":[119,907777.63],"a_caminho":[16,198227.5],"recebido":[312,4079559.1],"cancelado":[37,63048]},
+"pedidos_por_unidade_hash":"0cefb8ea41c415bfab943e5f9f88e526","parcelas_total_rs":3647979.81,
+"parcelas_por_situacao":{"vencida":[20,95091.17],"a_vencer":[70,198761.29],"falta_baixa_sistema":[12,60389.32],"cancelada":[6,19559],"quitada":[334,2277952.95],"falta_planilha":[59,645374.51],"falta_omie":[40,350851.57]},
+"pagamentos_total_rs":757184.76,"pagamento_parcela_rs":693473.76,"pagamentos_por_unidade_hash":"e8b424eb593df6a4b59b37d4574f5d69","parcelas_por_unidade_hash":"114d2991caaf83afa44a97df25d55992",
+"evento_ate_agora":9763,"pedido_atualizado_hash":"378c545820ca24c492c7a4cae26de21f",
+"pedidos_com_unidade_em_public_unidades":484,
+"diferencas_esperadas":{"pessoa":"0 -> 135: pedidos_novo.pessoa agora é a view sobre nucleo.pessoa","evento_ate_agora":"9762 -> 9763: 1 registro descrevendo a troca de chave (por = migracao-nucleo)"},
+"depois_da_0013":{"receita":51,"receita_item":327,"termo":36,"unidade_protocolo":53,"pedidos_parcelas_pagamentos":"não mexidos pela 0013"}}

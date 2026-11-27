@@ -3,7 +3,8 @@
 //    conferência pedido × NF e o histórico de alterações de lá);
 //  * os eventos do sistema novo (registro de alterações pedidos_novo.evento) do pedido, das parcelas,
 //    pagamentos, itens, anexos e notas fiscais ligadas, já em texto, para a ficha mesclar com o histórico antigo.
-// Mesmas regras de acesso da pedidos-api: login, troca de senha feita, autenticador para admin/financeiro, escopo de unidades.
+// Mesmas regras de acesso da pedidos-api: login, troca de senha feita, autenticador para quem exige (admin/financeiro),
+// escopo de unidades — tudo lido do núcleo (nucleo.acesso(email, 'laboratorios')) desde 27/11/2026.
 // Resposta compatível com a versão anterior (dados, links, conf, historico); acrescenta "campos" e "novos".
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -83,7 +84,9 @@ async function eventosNovos(pid: string) {
     ) order by em desc, id desc limit 300`;
   if (!ev.length) return [];
   const uns: Record<string, string> = {};
-  for (const u of await sql`select id::text id, nome from pedidos_novo.unidade`) uns[u.id] = u.nome;
+  for (const u of await sql`select id::text id, nome from nucleo.unidade`) uns[u.id] = u.nome;
+  // registros antigos guardam o id da unidade de antes do núcleo (equivalência em nucleo.unidade_ref)
+  for (const u of await sql`select r.ref id, u.nome from nucleo.unidade_ref r join nucleo.unidade u on u.id = r.unidade_id where r.sistema = 'pedidos_novo.unidade'`) uns[u.id] = u.nome;
   const prodIds = new Set<string>(), arqIds = new Set<string>();
   for (const e of ev) {
     const r = e.depois || e.antes || {};
@@ -135,13 +138,13 @@ Deno.serve(async (req) => {
     const { data, error } = await admin.auth.getUser(token);
     if (error || !data?.user?.email) return resp(401, { erro: "Sua sessão terminou. Entre de novo." });
     const u = data.user;
-    const [usu] = await sql`select papel, unidades::text[] unidades from pedidos_novo.usuario where email = ${u.email!.toLowerCase()} and ativo`;
-    if (!usu) return resp(403, { erro: "Sem acesso." });
+    const [usu] = await sql`select nucleo.acesso(email, 'laboratorios') a from nucleo.usuario where email = ${u.email!.toLowerCase()} and ativo`;
+    if (!usu || !usu.a?.ver) return resp(403, { erro: "Sem acesso." });
     if ((u.app_metadata as any)?.trocar_senha === true) return resp(403, { erro: "Antes de continuar, troque a senha temporária." });
-    if (["admin", "financeiro"].includes(usu.papel) && jwtAal(token) !== "aal2") return resp(403, { erro: "Confirme o código do aplicativo autenticador." });
+    if (usu.a.mfa && jwtAal(token) !== "aal2") return resp(403, { erro: "Confirme o código do aplicativo autenticador." });
     const b = await req.json().catch(() => ({}));
     if (typeof b.pedido_id !== "string" || !UUID.test(b.pedido_id)) return resp(400, { erro: "Pedido inválido." });
-    const un: string[] = usu.unidades?.length ? usu.unidades : (["unidade", "socio"].includes(usu.papel) ? [] : null as any);
+    const un: string[] | null = usu.a.unidades === null ? null : (usu.a.unidades as string[]);
     const [p] = await sql`select legado_ref from pedidos_novo.pedido where id = ${b.pedido_id}
       and ${un === null ? sql`true` : sql`unidade_id = any(${arr(un)}::uuid[])`}`;
     if (!p) return resp(404, { erro: "Pedido não encontrado." });

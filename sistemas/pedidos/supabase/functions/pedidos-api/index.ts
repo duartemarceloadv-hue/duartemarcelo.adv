@@ -1,13 +1,16 @@
 // =====================================================================
 // pedidos-api — API do Sistema de Pedidos Dr. Hair (novo), ambiente de teste
 // verify_jwt = true: só entra quem tem sessão do Supabase Auth.
-// Lê e grava somente na área pedidos_novo (ligação direta ao banco) e no
-// bucket privado 'pedidos-novo' (chave de serviço, nunca exposta ao navegador).
+// Lê e grava na área pedidos_novo e no núcleo (cadastros comuns: nucleo.*), por ligação direta ao banco,
+// e no bucket privado 'pedidos-novo' (chave de serviço, nunca exposta ao navegador).
+// Acesso (27/11/2026): vem de nucleo.usuario_papel pela função nucleo.acesso(email, 'laboratorios').
 // Todas as gravações passam pelos gatilhos de auditoria (pedidos_novo.evento),
 // com "por" = e-mail de quem fez (request.jwt.claims da transação).
 // =====================================================================
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { acoesCadastros } from "./cadastros.ts";
+import { acoesReceitas } from "./receitas.ts";
 
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 3, idle_timeout: 20 });
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -20,8 +23,8 @@ const ORIGENS = [
   /^https:\/\/[a-z0-9-]+--pedidos-novo-drhair\.netlify\.app$/,
   /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
 ];
-const PAPEIS_MFA = ["admin", "financeiro"];
-const PAPEIS_ESCRITA = ["admin", "central", "financeiro", "unidade", "socio"];
+// ordem para escolher o papel principal de quem tem mais de um
+const ORDEM_PAPEL = ["operacoes", "admin", "financeiro", "central", "socio", "unidade", "leitura"];
 
 class Erro extends Error {
   constructor(public status: number, msg: string, public codigo = "erro", public extra: Record<string, unknown> = {}) {
@@ -81,9 +84,10 @@ function origemParcela(o: string): string {
 }
 
 // ---------- sessão / acesso ----------
-type Ctx = {
-  uid: string; email: string; nome: string; papel: string; unidades: string[]; aal: string;
-  trocar: boolean; precisaMfa: boolean; temFator: boolean;
+export type Ctx = {
+  uid: string; email: string; nome: string; papel: string; papeis: string[]; unidades: string[]; todas: boolean; aal: string;
+  trocar: boolean; precisaMfa: boolean; temFator: boolean; gravar: boolean; admin: boolean; cadastros: boolean;
+  receitas: boolean; receitasGravar: boolean;
 };
 function payloadJwt(t: string): Record<string, unknown> {
   try {
@@ -100,15 +104,21 @@ async function sessao(req: Request): Promise<Ctx> {
   if (error || !data?.user?.email) throw new Erro(401, "Sua sessão terminou. Entre de novo.", "sem_sessao");
   const u = data.user;
   const email = u.email!.toLowerCase();
-  const [usu] = await sql`select nome, papel, unidades::text[] unidades from pedidos_novo.usuario where email = ${email} and ativo`;
-  if (!usu) throw new Erro(403, "Este e-mail não tem acesso ao Sistema de Pedidos. Peça liberação ao administrador.", "sem_acesso");
+  const [usu] = await sql`select u.nome, nucleo.acesso(u.email, 'laboratorios') a from nucleo.usuario u where u.email = ${email} and u.ativo`;
+  if (!usu || !usu.a?.ver) throw new Erro(403, "Este e-mail não tem acesso ao Sistema de Pedidos. Peça liberação ao administrador.", "sem_acesso");
+  const a = usu.a as { papeis: string[]; unidades: string[] | null; gravar: boolean; admin: boolean; mfa: boolean; cadastros: boolean };
+  const papeis = [...a.papeis].sort((x, y) => (ORDEM_PAPEL.indexOf(x) + 99) % 99 - (ORDEM_PAPEL.indexOf(y) + 99) % 99);
   const jwt = payloadJwt(token);
   return {
-    uid: u.id, email, nome: usu.nome, papel: usu.papel, unidades: usu.unidades || [],
+    uid: u.id, email, nome: usu.nome, papel: papeis[0], papeis, unidades: a.unidades || [], todas: a.unidades === null,
     aal: String(jwt.aal || "aal1"),
     trocar: (u.app_metadata as Record<string, unknown>)?.trocar_senha === true,
-    precisaMfa: PAPEIS_MFA.includes(usu.papel),
+    precisaMfa: a.mfa,
     temFator: (u.factors || []).some((f) => f.status === "verified"),
+    gravar: a.gravar, admin: a.admin, cadastros: a.cadastros,
+    // documento-mestre §7: o financeiro nunca vê receitas nem prescritores
+    receitas: papeis.some((p) => p !== "financeiro"),
+    receitasGravar: papeis.some((p) => ["operacoes", "admin", "central"].includes(p)),
   };
 }
 function exigeLiberado(c: Ctx) {
@@ -116,21 +126,20 @@ function exigeLiberado(c: Ctx) {
   if (c.precisaMfa && c.aal !== "aal2") throw new Erro(403, "Confirme o código do aplicativo autenticador para continuar.", "mfa");
 }
 function exigeEscrita(c: Ctx) {
-  if (!PAPEIS_ESCRITA.includes(c.papel)) throw new Erro(403, "Seu acesso é só de consulta; não é possível gravar.", "so_leitura");
+  if (!c.gravar) throw new Erro(403, "Seu acesso é só de consulta; não é possível gravar.", "so_leitura");
 }
 // null = vê todas as unidades; lista = só essas (lista vazia = nenhuma)
 function escopo(c: Ctx): string[] | null {
-  if (c.unidades.length) return c.unidades;
-  if (c.papel === "unidade" || c.papel === "socio") return [];
-  return null;
+  return c.todas ? null : c.unidades;
 }
 const filtroUn = (c: Ctx, col: string) => {
   const e = escopo(c);
   return e === null ? sql`true` : sql`${sql.unsafe(col)} = any(${arr(e)}::uuid[])`;
 };
-async function comAuditoria<T>(c: Ctx, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
+async function comAuditoria<T>(c: Ctx, fn: (tx: postgres.TransactionSql) => Promise<T>, justificativa?: string): Promise<T> {
   return await sql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ email: c.email, sub: c.uid, role: "authenticated" })}, true)`;
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ email: c.email, sub: c.uid, role: "authenticated" })}, true),
+                    set_config('nucleo.origem', 'tela', true), set_config('nucleo.justificativa', ${justificativa || ""}, true)`;
     return await fn(tx);
   }) as T;
 }
@@ -376,7 +385,7 @@ async function aPedido(c: Ctx, b: any) {
   const e = escopo(c);
   const unidades = await sql`select id, nome from pedidos_novo.unidade where ativo and ${e === null ? sql`true` : sql`id = any(${arr(e)}::uuid[])`} order by nome`;
   p.numLabRaw = p.numLab;
-  return { hoje: HOJE, lab: LABS[p.lab], pedido: p, unidades, pode_gravar: PAPEIS_ESCRITA.includes(c.papel), pode_admin: c.papel === "admin" };
+  return { hoje: HOJE, lab: LABS[p.lab], pedido: p, unidades, pode_gravar: c.gravar, pode_admin: c.admin };
 }
 async function aUnidades(c: Ctx) {
   const e = escopo(c);
@@ -397,7 +406,7 @@ async function aPagamentos(c: Ctx, b: any) {
   return {
     hoje: HOJE, h7,
     unidades: Object.entries(uns).map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
-    parcelas: lista, pode_gravar: PAPEIS_ESCRITA.includes(c.papel),
+    parcelas: lista, pode_gravar: c.gravar,
   };
 }
 
@@ -658,7 +667,7 @@ async function aCancelarPedido(c: Ctx, b: any) {
 }
 async function aReabrirPedido(c: Ctx, b: any) {
   exigeEscrita(c);
-  if (c.papel !== "admin") throw new Erro(403, "Só o administrador pode reabrir um pedido cancelado.");
+  if (!c.admin) throw new Erro(403, "Só o administrador pode reabrir um pedido cancelado.");
   const id = uuid(b.pedido_id);
   return await comAuditoria(c, async (tx) => {
     const p = await travaPedido(tx, c, id);
@@ -812,6 +821,10 @@ async function aTrocarSenha(c: Ctx, b: any) {
   return { ok: true, mensagem: "Senha trocada." };
 }
 
+// ---------- módulos em arquivo próprio (cadastros do núcleo, receitas e termos) ----------
+export type Dep = typeof DEP;
+const DEP = { sql, Erro, uuid, dataValida, txt, numero, plural, dt, R, r2, escopo, hojeBanco, comAuditoria };
+
 // ---------- servidor ----------
 Deno.serve(async (req) => {
   const origem = req.headers.get("Origin") || "";
@@ -834,7 +847,8 @@ Deno.serve(async (req) => {
     const acao = String(b?.acao || "");
     const c = await sessao(req);
     if (acao === "sessao") {
-      return resp(200, { email: c.email, nome: c.nome, papel: c.papel, trocar_senha: c.trocar, precisa_mfa: c.precisaMfa, aal: c.aal, tem_fator: c.temFator, pode_gravar: PAPEIS_ESCRITA.includes(c.papel) });
+      return resp(200, { email: c.email, nome: c.nome, papel: c.papel, papeis: c.papeis, trocar_senha: c.trocar, precisa_mfa: c.precisaMfa, aal: c.aal, tem_fator: c.temFator,
+        pode_gravar: c.gravar, cadastros: c.cadastros, receitas: c.receitas, receitas_gravar: c.receitasGravar });
     }
     if (acao === "trocar_senha") return resp(200, await aTrocarSenha(c, b));
     exigeLiberado(c);
@@ -844,6 +858,7 @@ Deno.serve(async (req) => {
       cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo, baixar_sem_comprovante: aBaixarSemComprovante,
       editar_pedido: aEditarPedido, cancelar_pedido: aCancelarPedido, reabrir_pedido: aReabrirPedido,
       salvar_parcela: aSalvarParcela, cancelar_parcela: aCancelarParcela, produtos: aProdutos, salvar_itens: aSalvarItens,
+      ...acoesCadastros(DEP), ...acoesReceitas(DEP),
     };
     const f = acoes[acao];
     if (!f) throw new Erro(400, "Ação desconhecida.");

@@ -1,0 +1,4 @@
+{"unidade":53,"unidade_com_mesmo_uuid_de_public_unidades":53,"unidade_ref_pedidos_novo":53,"unidade_apelido":71,"empresa":53,"unidade_empresa":53,"unidade_empresa_sem_data_de_inicio":4,
+ "pessoa":135,"pessoa_com_funcao_rt_ou_prescritor":83,"pessoa_socio":52,"profissional":83,"profissional_com_registro":56,"habilitado_prescrever":56,"prescritor_unidade":48,
+ "unidade_rt_vigente":43,"unidade_rt_titular":41,"unidade_rt_substituta":2,"unidade_rt_encerrada":17,"socio_unidade":52,"pessoa_documento_fiscal":0,
+ "usuario":2,"usuario_papel":2,"pendencia_cadastro":{"possivel_duplicada":57,"socio_empresa":1,"datas_inconsistentes":1},"evento_carga":1140}
