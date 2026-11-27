@@ -31,3 +31,7 @@ Contexto: Dr. Hair, rede de clínicas capilares (53 unidades hoje, rumo a 60+). 
 - Supabase com ambiente de teste.
 - API do Claude como componente (leitura de NF, cartão CNPJ, contrato social, pedidos), não como lugar de construção.
 - Rotinas recorrentes como tarefas agendadas.
+
+## DECISÃO DO DONO (27/11, durante o conselho global) — vale acima de qualquer proposta
+- A PREMIAÇÃO FICA FORA do sistema de operações. É um sistema à parte, com regras próprias, e a política ainda vai ser criada antes. Não desenhar a Premiação como módulo do sistema único.
+- O que ainda pode ser avaliado (como sugestão, não como módulo): a Premiação apenas LER os cadastros comuns do núcleo (unidades, pessoas) para não duplicar dados, e eventualmente avisar pendências na tela inicial por link. Nada além disso.
