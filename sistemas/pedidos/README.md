@@ -59,3 +59,16 @@ Ações da API (POST com `acao`): `sessao`, `trocar_senha`, `inicio`, `pedidos`,
 
 **Edição (27/11/2026):** dados do pedido, cancelamento com motivo (nada é apagado), parcelas (lançar, corrigir, cancelar;
 parcela com comprovante não pode ser cancelada nem ficar menor que o pago) e itens (preço sugerido pela tabela vigente na data do envio).
+
+## Robôs (conectores)
+
+Função `conectores` (`supabase/functions/conectores/index.ts`), chamada pelo pg_cron 1 vez ao dia (decisão de 27/11/2026),
+com a chave guardada no Vault (`pedidos_novo_cron_key`; no código só o SHA-256). Cada execução fica em
+`pedidos_novo.execucao_conector` (lidos, aplicados, erros, resumo) e cada alteração no registro de alterações
+(por = `robo-planilha-cp` / `robo-rastreio-quality`). Teste sem gravar: corpo `{"acao": "...", "simular": true}`.
+
+| Robô | Quando (Brasília) | O que faz |
+|---|---|---|
+| `planilha` | 07:00 | Lê a planilha "Dr Hair - controle Edu" (aba 1). Etapa do laboratório e previsão do lab. (histórico em `etapa_lab`), previsão do pedido e saída do laboratório só quando vazias, observação só quando vazia, liga NFs ao pedido, "Data Pagto" = baixa na planilha da 1ª parcela. Pedidos da planilha que não existem no sistema viram alerta. |
+| `rastreio` | 07:20 | Consulta a Quality por NF + CNPJ da unidade (pedidos do Centro Paulista não recebidos). Grava situação do rastreio, saída (se vazia) e entrega (quando todas as NFs foram entregues). Retirada em Sorocaba = entregue. |
+| Omie | — | Ainda depende da tarefa "Sincronizar Portal Omie" (computador do dono), que hoje envia só ao sistema atual. |

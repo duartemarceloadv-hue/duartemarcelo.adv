@@ -128,12 +128,15 @@ async function planilha(c: Ctx) {
     try {
       await comAuditoria(POR, async (tx) => {
         const etapa = limpa(g("statusLab")).toUpperCase(); const prevLab = data(g("previsaoLab"));
-        if (etapa && (etapa !== String(p.etapa || "").toUpperCase() || (prevLab || null) !== (p.etapa_prev || null))) {
-          mud.push(`etapa: ${p.etapa || "—"} → ${etapa}`);
+        const novaEtapa = etapa && etapa !== String(p.etapa || "").toUpperCase();
+        const novaPrev = etapa && prevLab && prevLab !== p.etapa_prev;
+        if (novaEtapa || novaPrev) {
+          mud.push(novaEtapa ? `etapa: ${p.etapa || "—"} → ${etapa}` : `previsão do laboratório: ${p.etapa_prev || "—"} → ${prevLab}`);
           if (!c.simular) await tx`insert into pedidos_novo.etapa_lab (pedido_id, etapa, previsao, origem) values (${p.id}, ${etapa}, ${prevLab}, 'planilha')`;
         }
         const prev = data(g("previsao"));
-        if (prev && prev !== p.prev) { mud.push(`previsão: ${p.prev || "—"} → ${prev}`); if (!c.simular) await tx`update pedidos_novo.pedido set previsao_envio = ${prev} where id = ${p.id}`; }
+        // previsão só é preenchida quando vazia: no sistema novo ela define o prazo/atraso do laboratório
+        if (prev && !p.prev) { mud.push(`previsão: ${prev}`); if (!c.simular) await tx`update pedidos_novo.pedido set previsao_envio = ${prev} where id = ${p.id} and previsao_envio is null`; }
         const env = data(g("envio"));
         if (env && env <= HOJE && !p.exp) { mud.push(`saída do laboratório: ${env}`); if (!c.simular) await tx`update pedidos_novo.pedido set expedido_em = ${env} where id = ${p.id} and expedido_em is null`; }
         const obs = limpa(g("obs"));
@@ -202,10 +205,10 @@ async function rastreio(c: Ctx) {
         const res: any[] = [];
         for (const x of p.nfs) {
           const q = await consultaQuality(x.nf, p.cnpj, x.emissao || p.env || null, HOJE);
-          res.push({ nf: x.nf, ...q });
+          res.push({ nf: x.nf, confirmada: !!x.emissao, ...q });
           await new Promise((ok) => setTimeout(ok, 300));
         }
-        const txt = (q: any) => !q.achou ? "✖ NÃO ENCONTRADA" : q.entrega ? "✔ ENTREGUE" : q.rota && q.rota < addD(HOJE, -3) ? "⚠ EM ROTA (sem baixa)" : "🚚 EM TRÂNSITO";
+        const txt = (q: any) => !q.achou ? (q.confirmada ? "— NÃO RASTREADA (NF confirmada; outra transportadora, retirada ou junto com outro pedido)" : "✖ NÃO ENCONTRADA") : q.entrega ? "✔ ENTREGUE" : q.rota && q.rota < addD(HOJE, -3) ? "⚠ EM ROTA (sem baixa)" : "🚚 EM TRÂNSITO";
         sit = res.length === 1 ? txt(res[0]) : res.map((q) => `NF ${q.nf}: ${txt(q)}`).join(" / ");
         det = { nfs: res };
         const entradas = res.map((q) => q.entrada).filter(Boolean).sort();
