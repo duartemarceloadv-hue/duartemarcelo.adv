@@ -304,3 +304,7 @@ table.tp .sub2{white-space:nowrap}
 .dlg-corpo .erro{margin-top:8px}
 .dlg.larga{width:min(900px,100%)}
 .itens-ed select.ent{min-width:220px}
+.lista-simples{margin:6px 0 0;padding-left:18px;font-size:13px}
+.hist{list-style:none;margin:8px 0 0;padding:0;max-height:340px;overflow-y:auto;font-size:12.5px}
+.hist li{padding:6px 0;border-bottom:1px solid var(--border)}
+details summary{cursor:pointer}

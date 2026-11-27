@@ -39,12 +39,12 @@ function tag(t){return '<span class="tag '+t[1]+'">'+esc(t[0])+'</span>'}
 
 /* ---------- API ---------- */
 function ErroApi(status,corpo){this.status=status;this.corpo=corpo||{};this.message=(corpo&&corpo.erro)||('Erro '+status)}
-async function api(acao,dados){
+async function api(acao,dados,url){
   var s=(await sb.auth.getSession()).data.session;
   if(!s){mostrarLogin();throw new ErroApi(401,{erro:'Entre com seu e-mail e senha.',codigo:'sem_sessao'})}
   var r;
   try{
-    r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token,'apikey':SUPA_KEY},body:JSON.stringify(Object.assign({acao:acao},dados||{}))});
+    r=await fetch(url||API,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token,'apikey':SUPA_KEY},body:JSON.stringify(Object.assign({acao:acao},dados||{}))});
   }catch(e){throw new ErroApi(0,{erro:'Sem conexão com o servidor. Confira a internet e tente de novo.'})}
   var corpo=null; try{corpo=await r.json()}catch(e){}
   if(!r.ok){
@@ -455,10 +455,31 @@ function ficha(d){
   // Outros anexos
   var outros=p.arq.filter(function(a){return !usados[a.id]});
   colB+='<div class="sec"><h4>Outros anexos <small>'+plural(outros.length,'arquivo','arquivos')+'</small></h4>'+(outros.length?arqLista(outros):'<div class="fraco">Nenhum.</div>')+'</div>';
+  if(p.leg&&/^cp:/.test(p.leg)) colB+='<div class="sec" id="sec-legado"><h4>Sistema antigo <small>dados, links da Omie, conferência e histórico</small></h4><div class="fraco">Carregando…</div></div>';
   h+='<div class="f-cols"><div class="col">'+colA+'</div><div class="col">'+colB+'</div></div>';
   h+='<div class="origem">Arquivos marcados “no sistema antigo” ainda não foram copiados para o sistema novo. Os enviados por aqui abrem com “abrir”.</div>';
   h+='</div>';
   return h;
+}
+var API_HIST=SUPA_URL+'/functions/v1/pedidos-historico';
+function dtHora(s){if(!s)return '—';var d=new Date(s);return isNaN(d)?esc(s):d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}
+async function carregaLegado(id){
+  var el=$('#sec-legado'); if(!el) return;
+  try{
+    var r=await api('historico',{pedido_id:id},API_HIST);
+    if(!fichaAtual||fichaAtual.pedido.id!==id||!(el=$('#sec-legado')))return;
+    if(!r.tem){el.remove();return}
+    var dados=Object.keys(r.dados).filter(function(k){var v=r.dados[k];return v!==null&&v!==undefined&&v!==''});
+    var h='<h4>Sistema antigo <small>nº '+esc(r.id)+' · somente leitura</small></h4>';
+    if(dados.length) h+='<dl class="kv">'+dados.map(function(k){var v=r.dados[k];return '<dt>'+esc(k)+'</dt><dd>'+esc(/^\d{4}-\d{2}-\d{2}$/.test(String(v))?dt(v):(typeof v==='object'?JSON.stringify(v):v))+'</dd>'}).join('')+'</dl>';
+    if(r.links.length) h+='<div class="sub-sec"><b>Links</b><ul class="arqs">'+r.links.map(function(l){return '<li><span class="nm">'+esc(l.rotulo)+'</span><span class="ab"><a class="link" href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer">abrir</a></span></li>'}).join('')+'</ul></div>';
+    if(r.conf) h+='<div class="sub-sec"><b>Conferência pedido × nota fiscal</b> <span class="fraco">('+esc(r.conf.nfs||'')+(r.conf.em?' · '+dt(r.conf.em):'')+')</span>'+
+      (r.conf.ok?'<div class="d"><span class="ok">✓</span> Confere</div>':'<ul class="lista-simples">'+r.conf.diverg.map(function(x){return '<li class="vermelho">'+esc(x)+'</li>'}).join('')+'</ul>')+
+      (r.conf.avisos.length?'<ul class="lista-simples">'+r.conf.avisos.map(function(x){return '<li class="fraco">'+esc(x)+'</li>'}).join('')+'</ul>':'')+'</div>';
+    h+='<details class="sub-sec"><summary><b>Histórico de alterações</b> <span class="fraco">('+r.historico.length+')</span></summary><ul class="hist">'+
+      r.historico.map(function(x){return '<li><span class="fraco">'+dtHora(x.em)+' · '+esc(x.por||'?')+(x.auto&&x.auto!==x.por?' ('+esc(x.auto)+')':'')+'</span><br>'+esc(x.texto)+'</li>'}).join('')+'</ul></details>';
+    el.innerHTML=h;
+  }catch(x){var e=$('#sec-legado');if(e)e.innerHTML='<h4>Sistema antigo</h4><div class="fraco">'+esc(x.message)+'</div>'}
 }
 var ultimoFoco=null;
 async function abrirFicha(id){
@@ -468,7 +489,7 @@ async function abrirFicha(id){
   try{
     var d=await api('pedido',{pedido_id:id}); fichaAtual=d;
     if(!f.classList.contains('on')) return;
-    f.innerHTML=ficha(d); $('.f-corpo',f).scrollTop=0; $('#fechar').focus();
+    f.innerHTML=ficha(d); $('.f-corpo',f).scrollTop=0; $('#fechar').focus(); carregaLegado(id);
   }catch(x){if(x.status!==401&&x.status!==403)$('.f-corpo',f).innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}
 }
 function fecharFicha(){var f=$('#ficha');if(!f.classList.contains('on'))return;f.classList.remove('on');f.setAttribute('aria-hidden','true');$('#veu').classList.remove('on');fichaAtual=null;if(ultimoFoco&&ultimoFoco.focus)ultimoFoco.focus()}
