@@ -1,0 +1,850 @@
+<title>Operações Dr. Hair</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600&display=swap">
+<style>
+/* Casca: menu lateral navy fixo + cabeçalho preso + página que rola inteira. Kit: 4 tamanhos de letra, 5 cores de situação. */
+:root{
+  --f1:20px; --f2:16px; --f3:14px; --f4:12px;
+  --font:"Nunito Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --bg:#F3F5F7; --surface:#FFFFFF; --surface-2:#F8FAFB; --paper:#FFFFFF;
+  --fg:#1F2A33; --muted:#55636F; --line:#DCE2E8; --field:#8A96A3;
+  --menu:#1B3A4B; --menu-fg:#D6E0E6; --menu-hover:#24495C; --gold:#C8A96E;
+  --primary:#1B3A4B; --primary-ink:#FFFFFF; --focus:#1D5A85;
+  --n:#4F5C69; --n-bg:#E9EDF1;
+  --i:#1D5A85; --i-bg:#E2EDF6;
+  --s:#1B6E41; --s-bg:#E0F1E6;
+  --a:#855400; --a-bg:#FBEFD6;
+  --d:#A8231A; --d-bg:#FBE7E5;
+  --shadow:0 1px 2px rgba(20,35,45,.06);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161C; --surface:#19212A; --surface-2:#1E2731; --paper:#F4F6F8;
+  --fg:#E3E9EE; --muted:#A2AFBC; --line:#2A3540; --field:#6E7C8A;
+  --menu:#0F2430; --menu-fg:#C3D0D8; --menu-hover:#1A3646; --gold:#C8A96E;
+  --primary:#8CC2EA; --primary-ink:#0D1A25; --focus:#8CC2EA;
+  --n:#B3BEC9; --n-bg:#26303A; --i:#8CC2EA; --i-bg:#1D3346; --s:#86D3A4; --s-bg:#173323;
+  --a:#F0C46F; --a-bg:#3A2D14; --d:#F29B92; --d-bg:#3D1F1C; --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161C; --surface:#19212A; --surface-2:#1E2731; --paper:#F4F6F8;
+  --fg:#E3E9EE; --muted:#A2AFBC; --line:#2A3540; --field:#6E7C8A;
+  --menu:#0F2430; --menu-fg:#C3D0D8; --menu-hover:#1A3646; --gold:#C8A96E;
+  --primary:#8CC2EA; --primary-ink:#0D1A25; --focus:#8CC2EA;
+  --n:#B3BEC9; --n-bg:#26303A; --i:#8CC2EA; --i-bg:#1D3346; --s:#86D3A4; --s-bg:#173323;
+  --a:#F0C46F; --a-bg:#3A2D14; --d:#F29B92; --d-bg:#3D1F1C; --shadow:none; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:var(--f3);line-height:1.45;font-variant-numeric:tabular-nums}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+h1,h2,h3,p{margin:0}
+h1{font-size:var(--f1);font-weight:600;text-wrap:balance}
+h2{font-size:var(--f2);font-weight:600}
+small,.small{font-size:var(--f4)}
+a{color:var(--i)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- casca ---------- */
+.app{display:flex;min-height:100vh}
+.menu{width:216px;flex:none;background:var(--menu);color:var(--menu-fg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding-left:env(safe-area-inset-left,0px)}
+.logo{height:56px;display:flex;align-items:center;gap:10px;padding:0 18px;color:var(--gold);font-weight:600;font-size:var(--f2);border-bottom:1px solid rgba(255,255,255,.08)}
+.logo .mk{width:28px;height:28px;border:1.5px solid var(--gold);border-radius:6px;display:grid;place-items:center;font-size:var(--f4);flex:none}
+.menu nav{display:flex;flex-direction:column;padding:10px 8px;gap:2px}
+.mi{display:flex;align-items:center;gap:12px;height:40px;padding:0 10px;border-radius:6px;color:var(--menu-fg);text-decoration:none;white-space:nowrap}
+.mi:hover{background:var(--menu-hover)}
+.mi svg{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.mi.on{color:var(--gold);background:var(--menu-hover);font-weight:600}
+.mi .cnt{margin-left:auto;background:var(--gold);color:#1B3A4B;font-size:var(--f4);font-weight:600;border-radius:10px;padding:0 7px;line-height:20px}
+.sub{display:flex;flex-direction:column;padding:0 0 4px 42px;gap:0}
+.sub a{color:var(--menu-fg);text-decoration:none;font-size:var(--f4);line-height:28px;padding:0 8px;border-radius:4px}
+.sub a.on{color:var(--gold);font-weight:600}
+.sub a:hover{background:var(--menu-hover)}
+.menu .rod{margin-top:auto;padding:12px 18px;font-size:var(--f4);color:var(--menu-fg);opacity:.8}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.proto{background:var(--surface-2);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding-block:6px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));font-size:var(--f4);color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--field);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:2px 10px;font-size:var(--f4);cursor:pointer;color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--primary);color:var(--primary-ink);font-weight:600}
+header.cab{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;height:56px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+.cab .esp{flex:1}
+.uwrap{position:relative}
+.ubtn{height:36px;display:flex;align-items:center;gap:8px;border:1px solid var(--field);background:var(--surface);border-radius:6px;padding:0 10px;cursor:pointer;max-width:300px}
+.ubtn .lb{color:var(--muted);font-size:var(--f4)}
+.ubtn .vl{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ubtn.rest{background:var(--i-bg);border-color:var(--i)}
+.ubtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none}
+.limpar{border:0;background:none;color:var(--i);cursor:pointer;font-weight:600;padding:0 4px}
+.upop{position:absolute;top:42px;left:0;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:8px;width:280px;max-width:calc(100vw - 32px)}
+.upop label{display:flex;align-items:center;gap:10px;height:36px;padding:0 8px;border-radius:4px;cursor:pointer}
+.upop label:hover{background:var(--surface-2)}
+.upop .gr{font-size:var(--f4);color:var(--muted);padding:6px 8px 2px}
+.upop hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.upop .ok{display:flex;justify-content:flex-end;padding-top:6px}
+.mes select,.campo select,.campo input,textarea{height:36px;border:1px solid var(--field);border-radius:6px;background:var(--surface);padding:0 10px}
+textarea{height:auto;min-height:72px;padding:8px 10px;width:100%;resize:vertical}
+.usr{width:36px;height:36px;border-radius:50%;border:1px solid var(--field);background:var(--surface-2);display:grid;place-items:center;font-weight:600;font-size:var(--f4);cursor:pointer;flex:none}
+.usrpop{position:absolute;right:0;top:44px;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:6px;width:200px}
+.usrpop .nm{padding:6px 10px;font-weight:600}
+.usrpop .pf{padding:0 10px 6px;color:var(--muted);font-size:var(--f4)}
+.usrpop button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:4px;cursor:pointer}
+.usrpop button:hover{background:var(--surface-2)}
+.vercomo{background:var(--a-bg);color:var(--a);border-bottom:1px solid var(--line);font-weight:600;padding-block:6px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+
+.pg{padding-block:20px 40px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px;min-width:0}
+.tit{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.tit .ac{display:flex;gap:8px;flex-wrap:wrap}
+.atual{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:var(--f4);margin-top:-10px}
+.migalha{font-size:var(--f4);color:var(--muted);margin-bottom:-10px}
+.migalha a{color:var(--muted)}
+
+/* botões */
+.btn{height:36px;border-radius:6px;border:1px solid var(--field);background:var(--surface);padding:0 14px;cursor:pointer;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--fg)}
+.btn:hover{background:var(--surface-2)}
+.btn.pri{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.lnk{border-color:transparent;background:none;color:var(--i);padding:0 6px}
+.btn.sm{height:28px;padding:0 10px;font-size:var(--f4)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* selos */
+.selo{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;font-size:var(--f4);font-weight:600;white-space:nowrap}
+.selo.n{color:var(--n);background:var(--n-bg)} .selo.i{color:var(--i);background:var(--i-bg)}
+.selo.s{color:var(--s);background:var(--s-bg)} .selo.a{color:var(--a);background:var(--a-bg)}
+.selo.d{color:var(--d);background:var(--d-bg)}
+
+/* fichas de contagem / abas */
+.abas{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.abas button{border:0;background:none;padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font-weight:600}
+.abas button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--primary)}
+.abas .q{font-weight:400;color:var(--muted);margin-left:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{height:32px;border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.chip b{font-weight:600}
+.chip[aria-pressed="true"]{border-color:var(--primary);background:var(--i-bg)}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;box-shadow:var(--shadow)}
+.card .r{font-size:var(--f4);color:var(--muted)}
+.card .v{font-size:var(--f1);font-weight:600}
+.card[aria-pressed="true"]{border-color:var(--primary)}
+
+/* filtros */
+.filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.campo{display:flex;flex-direction:column;gap:2px}
+.campo label{font-size:var(--f4);color:var(--muted)}
+.campo.busca{flex:1 1 220px;min-width:0}
+.campo.busca input{width:100%}
+.ativos{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:var(--f4);color:var(--muted)}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 4px 0 10px;border-radius:12px;background:var(--i-bg);color:var(--i);font-weight:600}
+.tag button{border:0;background:none;color:inherit;cursor:pointer;width:20px;height:20px;border-radius:50%;line-height:1}
+.mais{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* tabela padrão: 8 colunas no máximo, linha 40 px */
+.tabela{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;table-layout:auto}
+th{font-size:var(--f4);font-weight:600;color:var(--muted);text-align:left;padding:0 12px;height:36px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{height:40px;padding:0 12px;border-bottom:1px solid var(--line);white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.clic{cursor:pointer}
+tbody tr.clic:hover td{background:var(--surface-2)}
+td.id{font-weight:600}
+.num{text-align:right}
+td.chk,th.chk{width:40px;padding-right:0}
+tfoot td{font-weight:600;border-top:1px solid var(--line);border-bottom:0;background:var(--surface-2)}
+.vazio{padding:28px 16px;text-align:center;color:var(--muted)}
+.mostrar{display:flex;justify-content:center;padding:8px}
+.lote{position:sticky;top:calc(env(safe-area-inset-top,0px) + 56px);z-index:5;background:var(--primary);color:var(--primary-ink);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lote .btn{height:28px;font-size:var(--f4)}
+.confirma{background:var(--a-bg);color:var(--fg);border:1px solid var(--a);border-radius:8px;padding:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.aviso{border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid}
+.aviso.d{background:var(--d-bg);border-color:var(--d);color:var(--fg)}
+.aviso.s{background:var(--s-bg);border-color:var(--s)}
+.aviso.i{background:var(--i-bg);border-color:var(--i)}
+.aviso .tx{flex:1 1 260px;min-width:0}
+.aviso strong{font-weight:600}
+
+/* ficha */
+.fcab{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.fcab .l1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fcab .l1 .ac{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;position:relative}
+.kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 24px}
+.kv div{display:flex;flex-direction:column;min-width:0}
+.kv dt,.kv .k{font-size:var(--f4);color:var(--muted)}
+.kv dd,.kv .v{margin:0;overflow-wrap:anywhere}
+.kv2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.falta{background:var(--a-bg);border:1px solid var(--a);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.falta .it{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.ancoras{display:flex;gap:4px 16px;flex-wrap:wrap;font-size:var(--f4)}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:8px;scroll-margin-top:72px}
+.sec>h2{padding:12px 16px;border-bottom:1px solid var(--line)}
+.sec .cp{padding:12px 16px}
+.sec .tabela{border:0;box-shadow:none;border-radius:0}
+.arqs{list-style:none;margin:0;padding:0}
+.arqs li{display:flex;align-items:center;gap:12px;min-height:40px;padding:0 16px;border-bottom:1px solid var(--line)}
+.arqs li:last-child{border-bottom:0}
+.arqs .nm{flex:1;min-width:0;overflow-wrap:anywhere}
+.arqs .mt{color:var(--muted);font-size:var(--f4)}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{display:grid;grid-template-columns:140px 1fr;gap:4px 16px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.hist li:last-child{border-bottom:0}
+.hist .q{font-size:var(--f4);color:var(--muted)}
+.hist .j{font-size:var(--f4);color:var(--muted);grid-column:2}
+.maispop{position:absolute;right:0;top:42px;z-index:6;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:6px;width:220px}
+.maispop button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:4px;cursor:pointer}
+.maispop button:hover{background:var(--surface-2)}
+.maispop .perigo{color:var(--d)}
+
+/* decisão e visualizador */
+.dec{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,3fr);gap:16px;align-items:start}
+.folha{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.folha .barra{width:100%;display:flex;justify-content:space-between;align-items:center;font-size:var(--f4);color:var(--muted);gap:8px;flex-wrap:wrap}
+.papel{background:var(--paper);color:#1F2A33;width:100%;max-width:640px;aspect-ratio:1/1.3;border:1px solid #DCE2E8;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:7% 8%;display:flex;flex-direction:column;gap:14px}
+.papel .pt{display:flex;justify-content:space-between;gap:12px;border-bottom:1.5px solid #1F2A33;padding-bottom:10px}
+.papel .pt b{font-size:var(--f2)}
+.papel .pl{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted #B5BFC8;padding:4px 0}
+.papel .pl span:first-child{color:#55636F}
+.papel .tot{margin-top:auto;display:flex;justify-content:space-between;font-weight:600;font-size:var(--f2);border-top:1.5px solid #1F2A33;padding-top:10px}
+.papel .ass{font-size:var(--f4);color:#55636F}
+.painel{background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column}
+.painel>div{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.painel>div:last-child{border-bottom:0}
+.painel .kv{grid-template-columns:1fr}
+.botoes{display:flex;flex-direction:column;gap:8px}
+.botoes .btn{width:100%}
+.regra{border-radius:6px;padding:8px 10px;background:var(--s-bg);color:var(--s);font-weight:600;font-size:var(--f4)}
+.regra.a{background:var(--a-bg);color:var(--a)}
+.feito{background:var(--s-bg);border:1px solid var(--s);border-radius:6px;padding:10px;color:var(--fg)}
+.usado li{min-height:32px}
+.erro{color:var(--d);font-size:var(--f4);font-weight:600}
+
+/* documentos: matriz */
+.legenda{display:flex;gap:8px 16px;flex-wrap:wrap;align-items:center;font-size:var(--f4);color:var(--muted)}
+.mtx td{text-align:left}
+.mtx th:not(:first-child){white-space:normal;line-height:1.2;padding-block:4px}
+.cel{border:0;background:none;padding:0;cursor:pointer}
+
+/* placeholder */
+.bloco{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:12px;max-width:720px}
+.lista-mais{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.lista-mais a{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-bottom:1px solid var(--line);color:var(--fg);text-decoration:none}
+.lista-mais a:last-child{border-bottom:0}
+.lista-mais svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+
+/* barra inferior (celular) */
+.barinf{display:none}
+.decbar{display:none}
+
+@media (max-width:1279px){
+  .menu{width:64px}
+  .logo span:not(.mk),.mi .tx,.sub,.menu .rod{display:none}
+  .logo{padding:0;justify-content:center}
+  .mi{justify-content:center;padding:0;position:relative}
+  .mi .cnt{position:absolute;top:2px;right:4px;margin:0;padding:0 5px;line-height:16px}
+  .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:1100px){.dec{grid-template-columns:1fr}}
+@media (min-width:861px) and (max-width:1279px){.c2{display:none}}
+@media (max-width:860px){
+  .menu{display:none}
+  .proto,header.cab,.pg,.vercomo{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .pg{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+  .ubtn{max-width:170px} .ubtn .lb{display:none}
+  header.cab{gap:8px}
+  .mes select{max-width:136px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kv,.kv2{grid-template-columns:1fr 1fr}
+  .tit .ac .btn.pri{display:none}
+  .tit .ac .sec-m{display:none}
+  .ficha-pri{display:flex!important}
+  .barinf{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:12;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .barinf a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:56px;color:var(--muted);text-decoration:none;font-size:var(--f4);position:relative}
+  .barinf a.on{color:var(--fg);font-weight:600}
+  .barinf a.on::before{content:"";position:absolute;top:0;left:25%;right:25%;height:2px;background:var(--primary)}
+  .barinf svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+  .barinf .cnt{position:absolute;top:4px;left:calc(50% + 6px);background:var(--d);color:#fff;font-size:var(--f4);border-radius:8px;padding:0 5px;line-height:16px}
+  body.r-decisao .barinf{display:none}
+  body.r-decisao .decbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:12;gap:8px;background:var(--surface);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .decbar .btn{flex:1;height:44px}
+  body.r-decisao .painel .botoes{display:none}
+  body.r-decisao .painel .pa:has(> .botoes:only-child){display:none}
+
+  /* tabela vira cartão */
+  .tabela.cartoes table,.tabela.cartoes tbody,.tabela.cartoes tr,.tabela.cartoes td,.tabela.cartoes tfoot{display:block}
+  .tabela.cartoes thead{display:none}
+  .tabela.cartoes{background:none;border:0;box-shadow:none}
+  .tabela.cartoes tbody{display:flex;flex-direction:column;gap:8px}
+  .tabela.cartoes tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+  .tabela.cartoes td{height:auto;padding:0;border:0;white-space:normal;max-width:none;overflow:visible;grid-column:1/-1;display:flex;justify-content:space-between;gap:12px;text-align:right}
+  .tabela.cartoes td::before{content:attr(data-l);color:var(--muted);font-size:var(--f4);text-align:left}
+  .tabela.cartoes td.id{grid-column:1;grid-row:1;display:block;text-align:left;font-weight:600}
+  .tabela.cartoes td.id::before,.tabela.cartoes td.st::before,.tabela.cartoes td.acao::before{content:none}
+  .tabela.cartoes td.st{grid-column:2;grid-row:1;display:block}
+  .tabela.cartoes td.acao{justify-content:flex-end;padding-top:6px}
+  .tabela.cartoes td.mh,.tabela.cartoes td.chk{display:none}
+  .tabela.cartoes tfoot tr{background:var(--surface-2)}
+  .tabela.cartoes tfoot td.mh{display:none}
+  .hist li{grid-template-columns:1fr}
+  .hist .j{grid-column:1}
+  .tit h1{flex:1 1 100%}
+}
+@media (max-width:420px){.kv,.kv2{grid-template-columns:1fr}.cards .card .v{font-size:var(--f2)}}
+</style>
+
+<div class="app">
+  <aside class="menu" aria-label="Menu principal">
+    <div class="logo"><span class="mk">DH</span><span>Dr. Hair</span></div>
+    <nav id="menu"></nav>
+    <div class="rod">Sistema único · protótipo</div>
+  </aside>
+  <div class="main">
+    <div class="proto">
+      <span>Protótipo — dados fictícios. Nada é gravado.</span>
+      <span style="display:inline-flex;align-items:center;gap:8px">Ver como
+        <span class="seg" role="group" aria-label="Ver como">
+          <button type="button" id="pf-op" aria-pressed="true">Operações</button>
+          <button type="button" id="pf-socio" aria-pressed="false">Sócio</button>
+        </span>
+      </span>
+    </div>
+    <header class="cab">
+      <div class="uwrap" id="uwrap"></div>
+      <div class="mes" id="mes" hidden>
+        <select id="mes-sel" aria-label="Mês">
+          <option>Novembro/2026</option><option>Outubro/2026</option><option>Setembro/2026</option>
+        </select>
+      </div>
+      <div class="esp"></div>
+      <div style="position:relative">
+        <button class="usr" id="usr" type="button" aria-label="Usuário" aria-expanded="false">PE</button>
+        <div class="usrpop" id="usrpop" hidden>
+          <div class="nm">Pessoa Exemplo</div>
+          <div class="pf" id="usr-pf">Operações</div>
+          <button type="button">Trocar senha</button>
+          <button type="button">Sair</button>
+        </div>
+      </div>
+    </header>
+    <main class="pg" id="pg"></main>
+  </div>
+</div>
+<nav class="barinf" id="barinf" aria-label="Navegação"></nav>
+<div class="decbar" id="decbar"></div>
+
+<script>
+(function(){
+"use strict";
+const HOJE = new Date(2026,10,27);
+const ICON = {
+  pend:'<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l1 8v6H4v-6z"/>',
+  ped:'<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
+  doc:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/>',
+  pop:'<path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/>',
+  cmp:'<path d="M3 4h2l2 11h11l2-8H6"/><circle cx="9" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>',
+  reb:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  pre:'<circle cx="12" cy="9" r="5"/><path d="M9 13l-1 8 4-2 4 2-1-8"/>',
+  cad:'<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7M21 20c0-2.6-1.6-4.8-4-5.6"/>',
+  cfg:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  mais:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'
+};
+const svg = k => '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>';
+const MENU = [
+  {h:'pendencias',t:'Pendências',i:'pend'},
+  {h:'pedidos',t:'Laboratórios',i:'ped',rotas:['pedido','visualizar']},
+  {h:'documentos',t:'Documentos',i:'doc'},
+  {h:'pops',t:'POPs',i:'pop'},
+  {h:'compras',t:'Compras e estoque',i:'cmp'},
+  {h:'reembolsos',t:'Reembolsos',i:'reb'},
+  {h:'premiacao',t:'Premiação',i:'pre'},
+  {h:'cadastros',t:'Cadastros',i:'cad',op:true},
+  {h:'configuracoes',t:'Configurações',i:'cfg',op:true,sub:[['rotinas','Rotinas'],['seguranca','Segurança e acessos'],['lixeira','Lixeira']]}
+];
+const BARRA = {op:['pendencias','pedidos','documentos','premiacao'],socio:['pendencias','pedidos','documentos']};
+
+const UNID = [
+  {id:'A',nome:'Unidade Exemplo A',socio:'Pessoa Exemplo 1'},
+  {id:'B',nome:'Unidade Exemplo B',socio:'Pessoa Exemplo 1'},
+  {id:'C',nome:'Unidade Exemplo C',socio:'Pessoa Exemplo 2'},
+  {id:'D',nome:'Unidade Exemplo D',socio:'Pessoa Exemplo 3'}
+];
+const SOCIO_UNID = ['A','B'];
+const nomeU = id => UNID.find(u=>u.id===id).nome;
+
+const S = {perfil:'op', sel:null, aba:'voce', mod:null, pendAtual:null, feitos:{}, motivo:null,
+  pv:'todos', busca:'', fLab:'', fSit:'', maisF:false, lote:new Set(), confirmaLote:false,
+  dFiltro:null, maisAcoes:false, upop:false};
+try{const u=JSON.parse(localStorage.getItem('dh-unid')||'null'); if(Array.isArray(u)) S.sel=u;}catch(e){}
+
+/* ---------- formatos ---------- */
+const brl = v => v==null ? '—' : v.toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2});
+const d = s => { const [a,m,dd]=s.split('-'); return dd+'/'+m+'/'+a; };
+const dias = s => Math.round((new Date(s+'T00:00:00') - HOJE)/86400000);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const selo = (c,t) => '<span class="selo '+c+'">'+esc(t)+'</span>';
+
+/* ---------- unidades visíveis ---------- */
+function minhas(){ return S.perfil==='socio' ? UNID.filter(u=>SOCIO_UNID.includes(u.id)) : UNID; }
+function ativas(){
+  const m = minhas().map(u=>u.id);
+  if(!S.sel || !S.sel.length) return m;
+  const f = S.sel.filter(x=>m.includes(x));
+  return f.length ? f : m;
+}
+function restrito(){ return ativas().length < minhas().length; }
+
+/* ---------- dados fictícios ---------- */
+const PEND = [
+  {id:1, mod:'Laboratórios', u:'A', prazo:'2026-11-24', resp:'op', valor:4812.37, sit:['d','Vencida'],
+   op:'Parcela 1/3 sem confirmação do laboratório', so:'Parcela aguardando o laboratório confirmar o pagamento',
+   doc:{tit:'Comprovante de pagamento', emi:'Banco Exemplo', linhas:[['Pagador','Unidade Exemplo A'],['CNPJ','00.000.000/0001-00'],['Favorecido','Laboratório Exemplo 1'],['Data','21/11/2026'],['Pedido','DH-2026-0412 · parcela 1/3']], tot:4812.37},
+   acoes:[['Cobrar laboratório','pri'],['Baixa sem comprovante','',true]]},
+  {id:2, mod:'Reembolsos', u:'A', prazo:'2026-11-29', resp:'socio', valor:312.40, sit:['a','Aguardando aprovação'],
+   op:'Aprovar reembolso de deslocamento', so:'Aprovar reembolso de deslocamento de Pessoa Exemplo 4',
+   doc:{tit:'Recibo de táxi', emi:'Pessoa Exemplo 4', linhas:[['Categoria','Deslocamento'],['Data da despesa','18/11/2026'],['Trajeto','Unidade Exemplo A até a Unidade Exemplo B'],['Forma de pagamento','PIX']], tot:312.40},
+   regra:['s','Dentro do limite de R$ 500,00 por despesa'], aprov:true},
+  {id:3, mod:'Compras e estoque', u:'C', prazo:'2026-12-01', resp:'socio', valor:4890.00, sit:['a','Aguardando aprovação'],
+   op:'Aprovar compra de cadeiras de atendimento', so:'Aprovar compra de cadeiras de atendimento',
+   doc:{tit:'Cotação vencedora', emi:'Fornecedor Exemplo', linhas:[['Item','Cadeira de atendimento'],['Quantidade','6'],['Preço unitário','R$ 815,00'],['Prazo de entrega','15 dias'],['Cotações recebidas','3']], tot:4890.00},
+   regra:['a','Acima de R$ 1.000,00: exige aprovação do sócio'], aprov:true},
+  {id:4, mod:'Documentos', u:'C', prazo:'2026-11-20', resp:'unidade', valor:null, sit:['d','Vencida'],
+   op:'Enviar novo certificado de dedetização', so:'Enviar novo certificado de dedetização',
+   doc:{tit:'Certificado de dedetização (atual)', emi:'Empresa Exemplo de Controle de Pragas', linhas:[['Unidade','Unidade Exemplo C'],['Emissão','20/05/2026'],['Validade','20/11/2026']], tot:null},
+   acoes:[['Cobrar a unidade','pri']]},
+  {id:5, mod:'Laboratórios', u:'B', prazo:'2026-11-30', resp:'op', valor:1050.00, sit:['i','Aberta'],
+   op:'Divergência entre o pedido de venda e o pedido', so:'Diferença entre o pedido e o que o laboratório faturou',
+   doc:{tit:'Pedido de venda do laboratório', emi:'Laboratório Exemplo 1', linhas:[['Pedido','DH-2026-0398'],['Item que diverge','Produto Exemplo 2'],['Quantidade no pedido','40'],['Quantidade no pedido de venda','50'],['Preço da tabela vigente','R$ 105,00']], tot:1050.00},
+   acoes:[['Vale o pedido','pri'],['Vale o laboratório','',true],['Pedir correção ao laboratório','']]},
+  {id:6, mod:'Documentos', u:'A', prazo:'2026-12-22', resp:'unidade', valor:null, sit:['a','Vence em 25 dias'],
+   op:'Enviar AVCB renovado', so:'Enviar o AVCB renovado',
+   doc:{tit:'AVCB (atual)', emi:'Corpo de Bombeiros (exemplo)', linhas:[['Unidade','Unidade Exemplo A'],['Emissão','22/12/2023'],['Validade','22/12/2026']], tot:null},
+   acoes:[['Enviar documento','pri']]},
+  {id:7, mod:'Laboratórios', u:'D', prazo:'2026-11-28', resp:'op', valor:2130.90, sit:['a','Falta a nossa baixa'],
+   op:'Confirmar baixa com o comprovante sugerido', so:'Pagamento em conferência',
+   doc:{tit:'Comprovante de pagamento', emi:'Banco Exemplo', linhas:[['Pagador','Unidade Exemplo D'],['CNPJ','00.000.000/0001-00'],['Data','25/11/2026'],['Parcela sugerida','DH-2026-0377 · 2/2']], tot:2130.90},
+   acoes:[['Confirmar baixa','pri']]},
+  {id:8, mod:'Laboratórios', u:'A', prazo:'2026-12-03', resp:'financeiro', valor:7415.22, sit:['i','A pagar'],
+   op:'Pagar boleto do laboratório', so:'Boleto do laboratório a pagar',
+   doc:{tit:'Boleto', emi:'Laboratório Exemplo 2', linhas:[['Pedido','DH-2026-0421'],['Parcela','1/2'],['Vencimento','03/12/2026']], tot:7415.22},
+   acoes:[['Registrar pagamento','pri']]},
+  {id:9, mod:'Reembolsos', u:'B', prazo:'2026-12-02', resp:'socio', valor:86.90, sit:['a','Aguardando aprovação'],
+   op:'Aprovar reembolso de material de escritório', so:'Aprovar reembolso de material de escritório de Pessoa Exemplo 5',
+   doc:{tit:'Nota de compra', emi:'Papelaria Exemplo', linhas:[['Categoria','Operação da unidade'],['Data da despesa','24/11/2026'],['Itens','Papel A4, canetas']], tot:86.90},
+   regra:['s','Dentro do limite de R$ 500,00 por despesa'], aprov:true},
+  {id:10, mod:'Laboratórios', u:'C', prazo:'2026-11-26', resp:'laboratorio', valor:3388.10, sit:['d','Vencida'],
+   op:'Laboratório não informou a baixa na planilha', so:'Aguardando o laboratório confirmar o pagamento',
+   doc:{tit:'Comprovante de pagamento', emi:'Banco Exemplo', linhas:[['Pagador','Unidade Exemplo C'],['Data','12/11/2026'],['Pedido','DH-2026-0390 · 1/1']], tot:3388.10},
+   acoes:[['Cobrar laboratório','pri']]}
+];
+function souEu(p){ return S.perfil==='op' ? p.resp==='op' : (p.resp==='socio'||p.resp==='unidade'); }
+const COM = {op:{socio:'Sócio',unidade:'Unidade',financeiro:'Financeiro',laboratorio:'Laboratório'},
+             socio:{op:'Operações',financeiro:'Financeiro',laboratorio:'Laboratório'}};
+function pendVis(){
+  const u = ativas();
+  return PEND.filter(p=>u.includes(p.u) && !S.feitos[p.id]);
+}
+function ordena(a,b){
+  const va=dias(a.prazo)<0, vb=dias(b.prazo)<0;
+  if(va!==vb) return va?-1:1;
+  if(a.prazo!==b.prazo) return a.prazo<b.prazo?-1:1;
+  return (b.valor||0)-(a.valor||0);
+}
+
+const PED = [
+  {n:'DH-2026-0421',u:'A',lab:'Laboratório Exemplo 2',em:'2026-11-19',et:['i','Em produção'],v:14830.44,pg:'a_vencer'},
+  {n:'DH-2026-0412',u:'A',lab:'Laboratório Exemplo 1',em:'2026-11-12',et:['i','Em trânsito'],v:14437.11,pg:'falta_omie'},
+  {n:'DH-2026-0409',u:'B',lab:'Laboratório Exemplo 1',em:'2026-11-10',et:['s','Recebido'],v:9216.50,pg:'quitada'},
+  {n:'DH-2026-0398',u:'B',lab:'Laboratório Exemplo 1',em:'2026-11-04',et:['a','Aguardando NF'],v:8820.00,pg:'a_vencer'},
+  {n:'DH-2026-0394',u:'C',lab:'Laboratório Exemplo 2',em:'2026-11-03',et:['s','Recebido'],v:5120.75,pg:'falta_planilha'},
+  {n:'DH-2026-0390',u:'C',lab:'Laboratório Exemplo 1',em:'2026-10-29',et:['s','Recebido'],v:3388.10,pg:'vencida'},
+  {n:'DH-2026-0377',u:'D',lab:'Laboratório Exemplo 1',em:'2026-10-21',et:['s','Recebido'],v:4261.80,pg:'falta_baixa'},
+  {n:'DH-2026-0371',u:'D',lab:'Laboratório Exemplo 2',em:'2026-10-18',et:['n','Sem rastreio'],v:2675.00,pg:'quitada'},
+  {n:'DH-2026-0365',u:'A',lab:'Laboratório Exemplo 1',em:'2026-10-14',et:['s','Recebido'],v:11904.29,pg:'quitada'}
+];
+const PG_OP = {quitada:['s','Quitada'],a_vencer:['i','A vencer'],falta_omie:['a','Falta confirmação do laboratório'],
+  falta_planilha:['a','Falta planilha do laboratório'],falta_baixa:['a','Falta a nossa baixa'],vencida:['d','Vencida']};
+const PG_SO = {quitada:['s','Paga'],a_vencer:['i','A pagar'],falta_omie:['s','Paga'],falta_planilha:['s','Paga'],falta_baixa:['s','Paga'],vencida:['d','Vencida']};
+const VISOES = [['todos','Todos'],['nf','Aguardando NF'],['venc','Boletos vencendo'],['rastreio','Sem rastreio'],['receb','Recebidos']];
+
+const TIPOS = ['Alvará','Licença sanitária','AVCB','Dedetização','Caixa d’água','CRT','PGRSS'];
+const MTX = { // dias até o vencimento; null = não enviado
+  A:[410,190,25,95,40,300,null], B:[260,58,520,-6,120,22,610],
+  C:[150,-15,48,-7,200,340,90], D:[700,330,410,160,-2,15,240]
+};
+function estDoc(x){
+  if(x==null) return ['n','Não enviado'];
+  if(x<0) return ['d','Vencido'];
+  if(x<=30) return ['a','30 dias'];
+  if(x<=60) return ['i','60 dias'];
+  return ['s','Válido'];
+}
+
+const ROT = [
+  {n:'Planilha do laboratório',f:'Planilha do Laboratório Exemplo 1',q:'Todo dia, 07:00',ul:'2026-11-27 07:00',px:'28/11/2026 07:00',l:'312 lidas · 6 alteradas',st:['s','Funcionou']},
+  {n:'Rastreio da transportadora',f:'Site da transportadora',q:'Todo dia, 07:20',ul:'2026-11-27 07:21',px:'28/11/2026 07:20',l:'41 lidas · 3 alteradas',st:['s','Funcionou']},
+  {n:'Confirmação do laboratório (Omie)',f:'Portal do laboratório, pelo navegador',q:'Todo dia, 06:30',ul:'2026-11-25 06:31',px:'28/11/2026 06:30',l:'Nada recebido',st:['d','Sem dados há 2 dias']},
+  {n:'Vencimento de documentos',f:'Documentos das unidades',q:'Todo dia, 07:40',ul:'2026-11-27 07:40',px:'28/11/2026 07:40',l:'4 pendências criadas',st:['s','Funcionou']},
+  {n:'Cópia de segurança dos arquivos',f:'Arquivos do sistema',q:'Domingo, 04:00',ul:'2026-11-22 04:12',px:'29/11/2026 04:00',l:'1.015 arquivos conferidos',st:['s','Funcionou']},
+  {n:'Receitas do mês',f:'Pedidos dos últimos 3 meses',q:'Dia 1, 06:05',ul:'2026-11-01 06:05',px:'01/12/2026 06:05',l:'4 rascunhos',st:['n','Aguardando o dia 1']},
+  {n:'Contagem mensal de estoque',f:'Formulário das unidades',q:'Dia 1, 07:00',ul:'2026-11-01 07:00',px:'01/12/2026 07:00',l:'Rodada aberta',st:['n','Aguardando o dia 1']}
+];
+const fdh = s => { const [dt,h]=s.split(' '); return d(dt)+' '+h; };
+
+/* ---------- casca ---------- */
+function rota(){ return (location.hash||'#pendencias').slice(1) || 'pendencias'; }
+function ativo(h){
+  const r=rota();
+  const m = MENU.find(x=>x.h===r || (x.rotas||[]).includes(r) || (x.sub||[]).some(s=>s[0]===r));
+  if(r==='decisao') return 'pendencias';
+  return m ? m.h : '';
+}
+function renderMenu(){
+  const n = pendVis().filter(souEu).length;
+  const a = ativo(), r=rota();
+  document.getElementById('menu').innerHTML = MENU.filter(m=>!(m.op && S.perfil!=='op')).map(m=>{
+    let s='<a class="mi'+(a===m.h?' on':'')+'" href="#'+m.h+'" title="'+m.t+'"'+(a===m.h?' aria-current="page"':'')+'>'+svg(m.i)+'<span class="tx">'+m.t+'</span>'+(m.h==='pendencias'&&n?'<span class="cnt">'+n+'</span>':'')+'</a>';
+    if(m.sub && a===m.h) s+='<div class="sub">'+m.sub.map(x=>'<a href="#'+x[0]+'" class="'+(r===x[0]?'on':'')+'">'+x[1]+'</a>').join('')+'</div>';
+    return s;
+  }).join('');
+  const b = BARRA[S.perfil].map(h=>MENU.find(m=>m.h===h));
+  document.getElementById('barinf').innerHTML = b.map(m=>'<a href="#'+m.h+'" class="'+(a===m.h?'on':'')+'">'+svg(m.i)+'<span>'+(m.h==='compras'?'Compras':m.t)+'</span>'+(m.h==='pendencias'&&n?'<span class="cnt">'+n+'</span>':'')+'</a>').join('')
+    + '<a href="#mais" class="'+(r==='mais'||!BARRA[S.perfil].includes(a)&&r!=='decisao'&&a!=='pendencias'?'on':'')+'">'+svg('mais')+'<span>Mais</span></a>';
+}
+function renderUnid(){
+  const w = document.getElementById('uwrap');
+  const m = minhas();
+  if(m.length<2){ w.innerHTML=''; return; }
+  const at = ativas(), rest = restrito();
+  const txt = !rest ? 'Todas as unidades' : at.length===1 ? nomeU(at[0]) : at.length+' unidades';
+  let h = '<div style="display:flex;align-items:center;gap:4px"><button type="button" id="ubtn" class="ubtn'+(rest?' rest':'')+'" aria-expanded="'+S.upop+'" aria-haspopup="true"><span class="lb">Unidade</span><span class="vl">'+txt+'</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'
+    + (rest?'<button type="button" class="limpar" id="ulimpar">Limpar</button>':'')+'</div>';
+  if(S.upop){
+    const grupos = {};
+    m.forEach(u=>{ (grupos[u.socio]=grupos[u.socio]||[]).push(u); });
+    h += '<div class="upop" role="dialog" aria-label="Escolher unidades"><label><input type="checkbox" id="u-todas" '+(!rest?'checked':'')+'> Todas as minhas unidades</label><hr>'
+      + Object.keys(grupos).map(g=>(S.perfil==='op'?'<div class="gr">'+esc(g)+'</div>':'')+grupos[g].map(u=>'<label><input type="checkbox" class="u-ck" value="'+u.id+'" '+(rest&&at.includes(u.id)?'checked':'')+'> '+u.nome+'</label>').join('')).join('')
+      + '<div class="ok"><button type="button" class="btn sm pri" id="u-ok">Aplicar</button></div></div>';
+  }
+  w.innerHTML = h;
+  document.getElementById('ubtn').onclick = ()=>{S.upop=!S.upop; renderUnid();};
+  const l=document.getElementById('ulimpar'); if(l) l.onclick=()=>{setSel(null);};
+  if(S.upop){
+    const todas=document.getElementById('u-todas');
+    todas.onchange=()=>{ if(todas.checked) w.querySelectorAll('.u-ck').forEach(c=>c.checked=false); };
+    w.querySelectorAll('.u-ck').forEach(c=>c.onchange=()=>{ todas.checked = ![...w.querySelectorAll('.u-ck')].some(x=>x.checked); });
+    document.getElementById('u-ok').onclick=()=>{
+      const v=[...w.querySelectorAll('.u-ck:checked')].map(x=>x.value);
+      S.upop=false; setSel(todas.checked||!v.length?null:v);
+    };
+  }
+}
+function setSel(v){ S.sel=v; S.lote.clear(); try{localStorage.setItem('dh-unid',JSON.stringify(v));}catch(e){} render(); }
+
+/* ---------- telas ---------- */
+function telaPend(){
+  const vis = pendVis();
+  const voce = vis.filter(souEu), outros = vis.filter(p=>!souEu(p));
+  const base = S.aba==='voce'?voce:outros;
+  const mods = [...new Set(base.map(p=>p.mod))];
+  if(S.mod && !mods.includes(S.mod)) S.mod=null;
+  const lista = base.filter(p=>!S.mod||p.mod===S.mod).sort(ordena);
+  const comQuem = S.aba==='outros';
+  const txt = p => S.perfil==='op'?p.op:p.so;
+  let h = '<div class="tit"><h1>Pendências</h1></div>'
+   + '<div class="abas" role="tablist"><button role="tab" data-aba="voce" aria-selected="'+(S.aba==='voce')+'">Aguardando você<span class="q">'+voce.length+'</span></button>'
+   + '<button role="tab" data-aba="outros" aria-selected="'+(S.aba==='outros')+'">Com outros<span class="q">'+outros.length+'</span></button></div>';
+  if(mods.length>1) h += '<div class="chips">'+mods.map(m=>{const c=base.filter(p=>p.mod===m).length;return '<button type="button" class="chip" data-mod="'+esc(m)+'" aria-pressed="'+(S.mod===m)+'">'+esc(m)+' <b>'+c+'</b></button>';}).join('')+'</div>';
+  if(!lista.length){
+    h += '<div class="tabela"><div class="vazio">'+(S.aba==='voce'?'Nada aguardando você.':'Nada com outras pessoas.')+'</div></div>';
+  } else {
+    h += '<div class="tabela cartoes"><table><thead><tr><th>Prazo</th><th class="c2">Módulo</th><th>Unidade</th><th>O que fazer</th>'+(comQuem?'<th>Com quem</th>':'')+'<th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody>'
+     + lista.map(p=>'<tr class="clic" data-p="'+p.id+'"><td data-l="Prazo">'+d(p.prazo)+'</td><td class="c2" data-l="Módulo">'+esc(p.mod)+'</td><td data-l="Unidade">'+nomeU(p.u)+'</td><td class="id" title="'+esc(txt(p))+'">'+esc(txt(p))+'</td>'
+       +(comQuem?'<td data-l="Com quem">'+(COM[S.perfil][p.resp]||'—')+'</td>':'')
+       +'<td class="num" data-l="Valor">'+brl(p.valor)+'</td><td class="st">'+selo(p.sit[0],p.sit[1])+'</td><td class="acao"><button type="button" class="btn sm" data-abrir="'+p.id+'">'+(S.aba==='voce'?'Resolver':'Ver')+'</button></td></tr>').join('')
+     + '</tbody></table></div>';
+  }
+  return h;
+}
+function bindPend(pg){
+  pg.querySelectorAll('[data-aba]').forEach(b=>b.onclick=()=>{S.aba=b.dataset.aba;S.mod=null;render();});
+  pg.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{S.mod=S.mod===b.dataset.mod?null:b.dataset.mod;render();});
+  pg.querySelectorAll('tr[data-p]').forEach(tr=>tr.onclick=()=>abrirPend(+tr.dataset.p));
+}
+function abrirPend(id){ S.pendAtual=id; S.motivo=null; location.hash='decisao'; if(rota()==='decisao') render(); }
+
+function papel(doc, unidade){
+  return '<div class="papel" role="img" aria-label="'+esc(doc.tit)+'"><div class="pt"><div><b>'+esc(doc.tit)+'</b><div class="ass">'+esc(doc.emi)+'</div></div><div class="ass">'+esc(unidade)+'</div></div>'
+   + doc.linhas.map(l=>'<div class="pl"><span>'+esc(l[0])+'</span><span>'+esc(l[1])+'</span></div>').join('')
+   + (doc.tot!=null?'<div class="tot"><span>Total</span><span>'+brl(doc.tot)+'</span></div>':'<div class="tot"><span>Documento</span><span>1 página</span></div>')
+   + '<div class="ass">Documento fictício do protótipo.</div></div>';
+}
+function acoesDe(p){
+  if(p.aprov){
+    if(S.perfil==='socio') return [['Aprovar','pri'],['Pedir explicação','',true],['Não aprovar','',true]];
+    return [['Aprovar em nome do sócio','pri',true],['Lembrar o sócio','']];
+  }
+  if(S.perfil==='socio'){
+    if(p.resp==='unidade') return [['Enviar documento','pri']];
+    return [];
+  }
+  return p.acoes||[];
+}
+function telaDecisao(){
+  const vis = pendVis().sort(ordena);
+  let p = PEND.find(x=>x.id===S.pendAtual && (vis.includes(x) || (S.feitoMsg && ativas().includes(x.u)))) || vis.find(souEu) || vis[0];
+  if(!p) return '<div class="tit"><h1>Pendência</h1></div><div class="bloco">Nada aguardando você. <a href="#pendencias">Voltar às pendências</a></div>';
+  S.pendAtual = p.id;
+  const fila = vis.filter(x=>souEu(x)===souEu(p));
+  const prox = fila[(fila.indexOf(p)+1)%fila.length];
+  const acs = acoesDe(p);
+  const txt = S.perfil==='op'?p.op:p.so;
+  let painelAcoes;
+  if(S.feitoMsg){
+    painelAcoes = '<div class="feito" role="status">'+esc(S.feitoMsg)+'</div>';
+  } else if(S.motivo!=null){
+    const a = acs[S.motivo];
+    painelAcoes = '<label for="motivo" style="font-weight:600">Motivo para "'+esc(a[0])+'"</label><textarea id="motivo" placeholder="Escreva o motivo. Ele fica no histórico."></textarea><div class="erro" id="merro" hidden>Escreva o motivo para continuar.</div>'
+      + '<div class="botoes"><button type="button" class="btn pri" id="mok">Confirmar</button><button type="button" class="btn" id="mcan">Voltar</button></div>';
+  } else if(acs.length){
+    painelAcoes = '<div class="botoes">'+acs.map((a,i)=>'<button type="button" class="btn '+(a[1]||'')+'" data-ac="'+i+'">'+esc(a[0])+'</button>').join('')+'</div>';
+  } else painelAcoes = '<p class="small" style="color:var(--muted)">Nenhuma ação sua neste item. Ele está com '+(COM[S.perfil][p.resp]||'outra pessoa')+'.</p>';
+  let h = '<div class="migalha"><a href="#pendencias">Pendências</a> / '+esc(p.mod)+'</div>'
+   + '<div class="tit"><h1>'+esc(txt)+'</h1><div class="ac">'+(prox&&prox!==p?'<button type="button" class="btn" id="prox">Próxima pendência</button>':'')+'</div></div>'
+   + '<div class="dec"><div class="folha"><div class="barra"><span>'+esc(p.doc.tit)+' · página 1 de 1</span><button type="button" class="btn sm">Baixar</button></div>'+papel(p.doc,nomeU(p.u))+'</div>'
+   + '<div class="painel"><div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h2>Decisão</h2>'+selo(p.sit[0],p.sit[1])+'</div>'
+   + '<dl class="kv" style="margin:0"><div><dt>Unidade</dt><dd>'+nomeU(p.u)+'</dd></div><div><dt>Valor</dt><dd>'+brl(p.valor)+'</dd></div><div><dt>Prazo</dt><dd>'+d(p.prazo)+'</dd></div></dl>'
+   + (p.regra?'<div class="regra '+(p.regra[0]==='a'?'a':'')+'">'+esc(p.regra[1])+'</div>':'')+'</div>'
+   + '<div class="pa">'+painelAcoes+'</div>'
+   + '<div><h2>Histórico</h2><ol class="hist" style="margin:0 -16px -14px"><li><span class="q">'+d(p.prazo.slice(0,8)+'20')+' 09:14</span><span>Criada pela rotina de '+esc(p.mod.toLowerCase())+'</span></li></ol></div>'
+   + '</div></div>';
+  document.getElementById('decbar').innerHTML = (!S.feitoMsg && S.motivo==null && acs.length) ? acs.slice(0,2).map((a,i)=>'<button type="button" class="btn '+(a[1]||'')+'" data-ac="'+i+'">'+esc(a[0])+'</button>').join('')+(acs.length>2?'<button type="button" class="btn" data-ac="2">'+esc(acs[2][0])+'</button>':'') : (prox&&prox!==p?'<button type="button" class="btn pri" data-prox="1">Próxima pendência</button>':'<a class="btn" href="#pendencias">Voltar às pendências</a>');
+  S._dec = {p, acs, prox};
+  return h;
+}
+function bindDecisao(pg){
+  const st=S._dec; if(!st) return;
+  const agir = i=>{
+    const a=st.acs[i];
+    if(a[2] && S.motivo==null){ S.motivo=i; render(); setTimeout(()=>{const t=document.getElementById('motivo'); if(t) t.focus();},0); return; }
+    concluir(a[0]);
+  };
+  const concluir = (nome)=>{
+    S.feitoMsg = 'Registrado: '+nome+(st.p.valor!=null?' · '+brl(st.p.valor):'')+' · 27/11/2026 14:32 · Pessoa Exemplo. No protótipo nada é gravado.';
+    S.feitos[st.p.id]=true; S.motivo=null; render();
+  };
+  document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>agir(+b.dataset.ac));
+  const ok=document.getElementById('mok');
+  if(ok) ok.onclick=()=>{ const t=document.getElementById('motivo'); if(!t.value.trim()){document.getElementById('merro').hidden=false;t.focus();return;} concluir(st.acs[S.motivo][0]); };
+  const c=document.getElementById('mcan'); if(c) c.onclick=()=>{S.motivo=null;render();};
+  const go=()=>{ if(st.prox){S.pendAtual=st.prox.id;S.motivo=null;S.feitoMsg=null;render();window.scrollTo(0,0);} };
+  const pr=document.getElementById('prox'); if(pr) pr.onclick=go;
+  document.querySelectorAll('[data-prox]').forEach(b=>b.onclick=go);
+}
+
+function pedFiltrados(){
+  const u=ativas();
+  return PED.filter(p=>u.includes(p.u)
+    && (S.pv==='todos' || (S.pv==='nf'&&p.et[1]==='Aguardando NF') || (S.pv==='venc'&&(p.pg==='a_vencer'||p.pg==='vencida')) || (S.pv==='rastreio'&&p.et[1]==='Sem rastreio') || (S.pv==='receb'&&p.et[1]==='Recebido'))
+    && (!S.fLab||p.lab===S.fLab) && (!S.fSit||p.pg===S.fSit)
+    && (!S.busca || (p.n+' '+nomeU(p.u)).toLowerCase().includes(S.busca.toLowerCase())));
+}
+function telaPedidos(){
+  const op = S.perfil==='op', PG = op?PG_OP:PG_SO;
+  const l = pedFiltrados();
+  const tot = l.reduce((s,p)=>s+p.v,0);
+  const sits = op ? Object.keys(PG_OP) : ['quitada','a_vencer','vencida'];
+  let h = '<div class="tit"><h1>Pedidos</h1><div class="ac">'+(op?'<button type="button" class="btn pri">Novo pedido</button>':'')+'</div></div>'
+   + '<div class="atual">Atualizado em 27/11/2026 07:21 · planilha do laboratório e rastreio'+(op?'<button type="button" class="btn lnk sm">Atualizar agora</button>':'')+'</div>'
+   + '<div class="abas" role="tablist">'+VISOES.map(v=>'<button role="tab" data-pv="'+v[0]+'" aria-selected="'+(S.pv===v[0])+'">'+v[1]+'</button>').join('')+'</div>'
+   + '<div class="filtros"><div class="campo busca"><label for="f-busca">Buscar</label><input id="f-busca" type="search" placeholder="Número do pedido ou unidade" value="'+esc(S.busca)+'"></div>'
+   + '<div class="campo"><label for="f-lab">Laboratório</label><select id="f-lab"><option value="">Todos</option><option'+(S.fLab==='Laboratório Exemplo 1'?' selected':'')+'>Laboratório Exemplo 1</option><option'+(S.fLab==='Laboratório Exemplo 2'?' selected':'')+'>Laboratório Exemplo 2</option></select></div>'
+   + '<div class="campo"><label for="f-sit">'+(op?'Situação do pagamento':'Pagamento')+'</label><select id="f-sit"><option value="">Todas</option>'+sits.map(s=>'<option value="'+s+'"'+(S.fSit===s?' selected':'')+'>'+PG[s][1]+'</option>').join('')+'</select></div>'
+   + '<button type="button" class="btn" id="f-mais" aria-expanded="'+S.maisF+'">Mais filtros</button></div>'
+   + (S.maisF?'<div class="mais"><div class="campo"><label for="f-de">Emissão de</label><input id="f-de" type="date" value="2026-10-01"></div><div class="campo"><label for="f-ate">até</label><input id="f-ate" type="date" value="2026-11-30"></div><div class="campo"><label for="f-et">Etapa</label><select id="f-et"><option>Todas</option><option>Em produção</option><option>Em trânsito</option><option>Recebido</option></select></div></div>':'');
+  const tags=[];
+  if(S.busca) tags.push(['busca','Busca: '+S.busca]);
+  if(S.fLab) tags.push(['lab',S.fLab]);
+  if(S.fSit) tags.push(['sit',PG[S.fSit][1]]);
+  if(tags.length) h += '<div class="ativos">Filtrando:'+tags.map(t=>'<span class="tag">'+esc(t[1])+'<button type="button" aria-label="Remover filtro" data-rm="'+t[0]+'">×</button></span>').join('')+'<button type="button" class="btn lnk sm" data-rm="tudo">Limpar filtros</button></div>';
+  if(op && S.lote.size){
+    const sel = PED.filter(p=>S.lote.has(p.n)); const sv = sel.reduce((s,p)=>s+p.v,0);
+    h += S.confirmaLote
+      ? '<div class="confirma" role="alert"><span style="flex:1 1 240px">Cobrar a baixa do laboratório em <b>'+sel.length+(sel.length===1?' pedido':' pedidos')+'</b> · '+brl(sv)+'. O texto vai para aprovação antes do envio.</span><button type="button" class="btn sm pri" id="l-ok">Confirmar</button><button type="button" class="btn sm" id="l-can">Voltar</button></div>'
+      : '<div class="lote"><b>'+S.lote.size+' selecionados</b><button type="button" class="btn sm" id="l-cob">Cobrar baixa do laboratório</button><button type="button" class="btn sm">Exportar pedidos</button><button type="button" class="btn sm lnk" id="l-limpa" style="color:inherit">Desmarcar</button></div>';
+  }
+  if(!l.length) return h+'<div class="tabela"><div class="vazio">Nenhum pedido com esses filtros. Tire um filtro ou troque a visão.</div></div>';
+  h += '<div class="tabela cartoes"><table><thead><tr>'+(op?'<th class="chk"><input type="checkbox" id="l-todos" aria-label="Selecionar todos"></th>':'')+'<th>Pedido</th><th>Unidade</th><th class="c2">Laboratório</th><th>Emissão</th><th>Etapa</th><th class="num">Valor</th><th>'+(op?'Situação do pagamento':'Pagamento')+'</th></tr></thead><tbody>'
+   + l.map(p=>'<tr class="clic" data-n="'+p.n+'">'+(op?'<td class="chk"><input type="checkbox" class="l-ck" value="'+p.n+'" aria-label="Selecionar '+p.n+'"'+(S.lote.has(p.n)?' checked':'')+'></td>':'')
+     +'<td class="id">'+p.n+'</td><td data-l="Unidade">'+nomeU(p.u)+'</td><td class="c2" data-l="Laboratório">'+p.lab+'</td><td data-l="Emissão">'+d(p.em)+'</td><td data-l="Etapa">'+selo(p.et[0],p.et[1])+'</td><td class="num" data-l="Valor">'+brl(p.v)+'</td><td class="st">'+selo(PG[p.pg][0],PG[p.pg][1])+'</td></tr>').join('')
+   + '</tbody><tfoot><tr>'+(op?'<td class="chk"></td>':'')+'<td class="id">Total · '+l.length+(l.length===1?' pedido':' pedidos')+'</td><td class="mh"></td><td class="mh c2"></td><td class="mh"></td><td class="mh"></td><td class="num" data-l="Valor">'+brl(tot)+'</td><td class="mh"></td></tr></tfoot></table></div>'
+   + '<div class="mostrar"><button type="button" class="btn" disabled>Mostrar mais 50</button></div>';
+  return h;
+}
+function bindPedidos(pg){
+  pg.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{S.pv=b.dataset.pv;render();});
+  const bu=document.getElementById('f-busca'); if(bu) bu.onchange=()=>{S.busca=bu.value.trim();render();};
+  const la=document.getElementById('f-lab'); if(la) la.onchange=()=>{S.fLab=la.value;render();};
+  const si=document.getElementById('f-sit'); if(si) si.onchange=()=>{S.fSit=si.value;render();};
+  const mf=document.getElementById('f-mais'); if(mf) mf.onclick=()=>{S.maisF=!S.maisF;render();};
+  pg.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{const k=b.dataset.rm; if(k==='busca'||k==='tudo')S.busca=''; if(k==='lab'||k==='tudo')S.fLab=''; if(k==='sit'||k==='tudo')S.fSit=''; render();});
+  pg.querySelectorAll('.l-ck').forEach(c=>{c.onclick=e=>e.stopPropagation(); c.onchange=()=>{c.checked?S.lote.add(c.value):S.lote.delete(c.value);S.confirmaLote=false;render();};});
+  pg.querySelectorAll('td.chk').forEach(td=>td.onclick=e=>e.stopPropagation());
+  const t=document.getElementById('l-todos'); if(t){ t.checked = pedFiltrados().every(p=>S.lote.has(p.n)); t.onchange=()=>{pedFiltrados().forEach(p=>t.checked?S.lote.add(p.n):S.lote.delete(p.n));render();}; }
+  const lc=document.getElementById('l-cob'); if(lc) lc.onclick=()=>{S.confirmaLote=true;render();};
+  const lk=document.getElementById('l-ok'); if(lk) lk.onclick=()=>{S.lote.clear();S.confirmaLote=false;render();};
+  const ln=document.getElementById('l-can'); if(ln) ln.onclick=()=>{S.confirmaLote=false;render();};
+  const ll=document.getElementById('l-limpa'); if(ll) ll.onclick=()=>{S.lote.clear();render();};
+  pg.querySelectorAll('tr[data-n]').forEach(tr=>tr.onclick=()=>{location.hash='pedido';});
+}
+
+function telaFicha(){
+  const op = S.perfil==='op';
+  const p = PED[1];
+  if(!ativas().includes(p.u)) return '<div class="migalha"><a href="#pedidos">Pedidos</a></div><div class="bloco">Este pedido é da '+nomeU(p.u)+', fora do filtro de unidade escolhido. <button type="button" class="btn sm" id="ulimpar2">Mostrar todas as unidades</button></div>';
+  const parc = [
+    {n:'1/3',v:'2026-11-22',val:4812.37,omie:false,pl:true,nos:true,st:'falta_omie'},
+    {n:'2/3',v:'2026-12-22',val:4812.37,omie:false,pl:false,nos:false,st:'a_vencer'},
+    {n:'3/3',v:'2027-01-21',val:4812.37,omie:false,pl:false,nos:false,st:'a_vencer'}];
+  const itens=[['Produto Exemplo 1',60,96.40],['Produto Exemplo 2',50,105.00],['Produto Exemplo 3',3,1134.37]];
+  const totI = itens.reduce((s,i)=>s+i[1]*i[2],0);
+  const PG = op?PG_OP:PG_SO;
+  const sim = b => b?selo('s','Sim'):selo('n','Não');
+  const secs = [['resumo','Resumo'],['itens','Itens'],['parcelas','Parcelas e boletos'],['notas','Notas fiscais'],['anexos','Outros anexos'],['historico','Histórico']];
+  let h = '<div class="migalha"><a href="#pedidos">Pedidos</a> / '+p.n+'</div>'
+   + '<div class="fcab"><div class="l1"><h2>Pedido '+p.n+'</h2>'+selo(p.et[0],p.et[1])+'<div class="ac">'
+   + (op?'<button type="button" class="btn pri">Registrar recebimento</button><button type="button" class="btn">Editar dados</button><button type="button" class="btn" id="f-maisac" aria-expanded="'+S.maisAcoes+'">Mais</button>'
+        :'<button type="button" class="btn pri">Pedir correção</button>')
+   + (S.maisAcoes&&op?'<div class="maispop"><button type="button">Exportar ficha</button><button type="button">Ver como o sócio</button><button type="button" class="perigo">Cancelar pedido</button></div>':'')
+   + '</div></div><dl class="kv" style="margin:0"><div><dt>Unidade</dt><dd>'+nomeU(p.u)+'</dd></div><div><dt>Laboratório</dt><dd>'+p.lab+'</dd></div><div><dt>Emissão</dt><dd>'+d(p.em)+'</dd></div><div><dt>Valor total</dt><dd>'+brl(p.v)+'</dd></div></dl></div>';
+  if(op) h += '<div class="falta"><b>O que falta</b><div class="it">Parcela 1/3 sem confirmação do laboratório '+selo('d','Vencida')+'<span class="small" style="color:var(--muted)">Com: Operações · prazo 24/11/2026</span><button type="button" class="btn sm" id="f-res">Resolver</button></div></div>';
+  h += '<nav class="ancoras" aria-label="Seções">'+secs.map(s=>'<a href="#pedido" data-anc="'+s[0]+'">'+s[1]+'</a>').join('')+'</nav>';
+  h += '<section class="sec" id="s-resumo"><h2>Resumo</h2><div class="cp"><dl class="kv kv2" style="margin:0">'
+   + [['Número no laboratório','136118'],['CNPJ da unidade','00.000.000/0001-00'],['Responsável técnico','Pessoa Exemplo 6'],['Previsão do laboratório','Não informada'],['Rastreio','Em trânsito desde 20/11/2026'],['Frete','R$ 0,00']].map(x=>'<div><dt>'+x[0]+'</dt><dd>'+x[1]+'</dd></div>').join('')
+   + '</dl></div></section>';
+  h += '<section class="sec" id="s-itens"><h2>Itens</h2><div class="tabela cartoes"><table><thead><tr><th>Produto</th><th class="num">Quantidade</th><th class="num">Preço unitário</th><th class="num">Total</th></tr></thead><tbody>'
+   + itens.map(i=>'<tr><td class="id">'+i[0]+'</td><td class="num" data-l="Quantidade">'+i[1]+'</td><td class="num" data-l="Preço unitário">'+brl(i[2])+'</td><td class="num" data-l="Total">'+brl(i[1]*i[2])+'</td></tr>').join('')
+   + '</tbody><tfoot><tr><td class="id">Total</td><td class="mh"></td><td class="mh"></td><td class="num" data-l="Total">'+brl(totI)+'</td></tr></tfoot></table></div></section>';
+  h += '<section class="sec" id="s-parcelas"><h2>Parcelas e boletos</h2><div class="tabela cartoes"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th>'+(op?'<th>Laboratório confirmou</th><th>Planilha</th><th>Nossa baixa</th>':'')+'<th>'+(op?'Situação':'Pagamento')+'</th><th></th></tr></thead><tbody>'
+   + parc.map(x=>'<tr><td class="id">Parcela '+x.n+'</td><td data-l="Vencimento">'+d(x.v)+'</td><td class="num" data-l="Valor">'+brl(x.val)+'</td>'+(op?'<td data-l="Laboratório confirmou">'+sim(x.omie)+'</td><td data-l="Planilha">'+sim(x.pl)+'</td><td data-l="Nossa baixa">'+sim(x.nos)+'</td>':'')+'<td class="st">'+selo(PG[x.st][0],PG[x.st][1])+'</td><td class="acao"><a class="btn sm" href="#visualizar">Ver boleto</a></td></tr>').join('')
+   + '</tbody><tfoot><tr><td class="id">Total</td><td class="mh"></td><td class="num" data-l="Valor">'+brl(parc.reduce((s,x)=>s+x.val,0))+'</td>'+(op?'<td class="mh"></td><td class="mh"></td><td class="mh"></td>':'')+'<td class="mh"></td><td class="mh"></td></tr></tfoot></table></div></section>';
+  h += '<section class="sec" id="s-notas"><h2>Notas fiscais</h2><div class="tabela cartoes"><table><thead><tr><th>Nota</th><th>Emissão</th><th class="num">Valor</th><th>Conferência com o pedido</th><th></th></tr></thead><tbody>'
+   + '<tr><td class="id">NF 000.118</td><td data-l="Emissão">14/11/2026</td><td class="num" data-l="Valor">'+brl(14437.11)+'</td><td data-l="Conferência">'+selo('s','Confere')+'</td><td class="acao"><a class="btn sm" href="#visualizar">Ver nota</a></td></tr></tbody></table></div></section>';
+  h += '<section class="sec" id="s-anexos"><h2>Outros anexos</h2><ul class="arqs">'
+   + [['Pedido de venda do laboratório','PDF · enviado em 12/11/2026 por Pessoa Exemplo'],['Comprovante de pagamento da parcela 1/3','PDF · enviado em 21/11/2026 por Pessoa Exemplo 1']].map(a=>'<li><span class="nm">'+a[0]+'<br><span class="mt">'+a[1]+'</span></span><a class="btn sm" href="#visualizar">Ver</a></li>').join('')
+   + '</ul></section>';
+  h += '<section class="sec" id="s-historico"><h2>Histórico</h2><ol class="hist">'
+   + [['21/11/2026 10:02','Pessoa Exemplo 1','Anexou o comprovante da parcela 1/3',''],
+      ['20/11/2026 07:21','Rotina de rastreio','Rastreio: de "Sem rastreio" para "Em trânsito"',''],
+      ['14/11/2026 07:00','Rotina da planilha','Etapa: de "Em produção" para "Faturado"',''],
+      ['13/11/2026 16:40','Pessoa Exemplo','Frete: de R$ 35,00 para R$ 0,00','Justificativa: frete incluso na negociação do mês.'],
+      ['12/11/2026 09:15','Pessoa Exemplo','Criou o pedido','']].map(x=>'<li><span class="q">'+x[0]+'<br>'+x[1]+'</span><span>'+x[2]+'</span>'+(x[3]?'<span class="j">'+x[3]+'</span>':'')+'</li>').join('')
+   + '</ol></section>';
+  return h;
+}
+function bindFicha(pg){
+  pg.querySelectorAll('[data-anc]').forEach(a=>a.onclick=e=>{e.preventDefault();const s=document.getElementById('s-'+a.dataset.anc); if(s) s.scrollIntoView({behavior:'smooth'});});
+  const m=document.getElementById('f-maisac'); if(m) m.onclick=()=>{S.maisAcoes=!S.maisAcoes;render();};
+  const r=document.getElementById('f-res'); if(r) r.onclick=()=>abrirPend(1);
+  const u=document.getElementById('ulimpar2'); if(u) u.onclick=()=>setSel(null);
+}
+
+function telaVisual(){
+  const doc={tit:'Boleto', emi:'Laboratório Exemplo 1', linhas:[['Pedido','DH-2026-0412'],['Parcela','1/3'],['Vencimento','22/11/2026'],['Pagador','Unidade Exemplo A'],['CNPJ','00.000.000/0001-00']], tot:4812.37};
+  return '<div class="migalha"><a href="#pedidos">Pedidos</a> / <a href="#pedido">DH-2026-0412</a> / Boleto</div>'
+   + '<div class="tit"><h1>Boleto da parcela 1/3</h1><div class="ac"><a class="btn" href="#pedido">Voltar ao pedido</a></div></div>'
+   + '<div class="dec"><div class="folha"><div class="barra"><span>Página 1 de 1</span><span style="display:flex;gap:8px"><button type="button" class="btn sm" disabled>Anterior</button><button type="button" class="btn sm">Próximo documento</button><button type="button" class="btn sm">Baixar</button></span></div>'+papel(doc,'Unidade Exemplo A')+'</div>'
+   + '<div class="painel"><div><h2>Documento</h2><dl class="kv" style="margin:0"><div><dt>Tipo</dt><dd>Boleto</dd></div><div><dt>Unidade</dt><dd>Unidade Exemplo A</dd></div><div><dt>CNPJ</dt><dd>00.000.000/0001-00</dd></div><div><dt>Vencimento</dt><dd>22/11/2026</dd></div><div><dt>Situação</dt><dd>'+selo('d','Vencido')+'</dd></div><div><dt>Origem</dt><dd>Rotina do laboratório · 14/11/2026 07:00</dd></div></dl></div>'
+   + '<div><h2>Usado em</h2><ul class="arqs usado" style="margin:0 -16px"><li><a href="#pedido" class="nm">Pedido DH-2026-0412 · parcela 1/3</a></li><li><a href="#pendencias" class="nm">Pendência: parcela sem confirmação do laboratório</a></li></ul></div>'
+   + '<div><h2>Lido do documento</h2><dl class="kv" style="margin:0"><div><dt>Valor</dt><dd>'+brl(4812.37)+' '+selo('a','Confirmar')+'</dd></div></dl><button type="button" class="btn sm">Confirmar leitura</button></div>'
+   + '</div></div>';
+}
+
+function telaDocs(){
+  const us = ativas().map(id=>UNID.find(u=>u.id===id));
+  const cont = {d:0,a:0,i:0,n:0};
+  us.forEach(u=>MTX[u.id].forEach(x=>{const e=estDoc(x)[0]; if(cont[e]!=null) cont[e]++;}));
+  const cards=[['d','Vencidos'],['a','Vencem em até 30 dias'],['i','Vencem em até 60 dias'],['n','Não enviados']];
+  let h = '<div class="tit"><h1>Documentos por unidade</h1><div class="ac"><button type="button" class="btn pri">Enviar documento</button></div></div>'
+   + '<div class="atual">Atualizado em 27/11/2026 07:40 · rotina de vencimentos</div>'
+   + '<div class="cards">'+cards.map(c=>'<button type="button" class="card" data-df="'+c[0]+'" aria-pressed="'+(S.dFiltro===c[0])+'"><span class="r">'+c[1]+'</span><span class="v">'+cont[c[0]]+'</span><span class="r">de '+(us.length*TIPOS.length)+' documentos</span></button>').join('')+'</div>'
+   + '<div class="legenda">Situação: '+selo('s','Válido')+selo('i','60 dias')+selo('a','30 dias')+selo('d','Vencido')+selo('n','Não enviado')
+   + (S.dFiltro?'<span class="tag">Mostrando só: '+cards.find(c=>c[0]===S.dFiltro)[1]+'<button type="button" aria-label="Remover filtro" id="df-x">×</button></span>':'')+'</div>';
+  h += '<div class="tabela cartoes mtx"><table><thead><tr><th>Unidade</th>'+TIPOS.map(t=>'<th>'+t+'</th>').join('')+'</tr></thead><tbody>'
+   + us.map(u=>'<tr><td class="id">'+u.nome+'</td>'+TIPOS.map((t,i)=>{const x=MTX[u.id][i],e=estDoc(x); const mostra=!S.dFiltro||e[0]===S.dFiltro;
+       const tip = x==null?'Não enviado':(x<0?'Venceu há '+(-x)+' dias':'Vence em '+x+' dias');
+       return '<td data-l="'+t+'"'+(mostra?'':' class="mh"')+'>'+(mostra?'<button type="button" class="cel" title="'+tip+'">'+selo(e[0],e[1])+'</button>':'<span aria-hidden="true" style="color:var(--line)">·</span>')+'</td>';}).join('')+'</tr>').join('')
+   + '</tbody></table></div>';
+  return h;
+}
+function bindDocs(pg){
+  pg.querySelectorAll('[data-df]').forEach(b=>b.onclick=()=>{S.dFiltro=S.dFiltro===b.dataset.df?null:b.dataset.df;render();});
+  const x=document.getElementById('df-x'); if(x) x.onclick=()=>{S.dFiltro=null;render();};
+}
+
+function semAcesso(){ return '<div class="tit"><h1>Sem acesso</h1></div><div class="bloco">Esta área é só da Operações. <a href="#pendencias">Voltar às pendências</a></div>'; }
+function telaRotinas(){
+  if(S.perfil!=='op') return semAcesso();
+  const falhas = ROT.filter(r=>r.st[0]==='d');
+  let h = '<div class="migalha"><a href="#configuracoes">Configurações</a> / Rotinas</div><div class="tit"><h1>Rotinas</h1></div>';
+  falhas.forEach(r=>{ h += '<div class="aviso d" role="alert"><span class="tx"><strong>'+r.n+' sem dados há 2 dias.</strong> Última leitura em '+fdh(r.ul)+'. Sem ela, as parcelas ficam sem a confirmação do laboratório. Abra o portal no computador que faz a leitura e rode de novo.</span><button type="button" class="btn sm">Rodar agora</button></div>'; });
+  h += '<div class="tabela cartoes"><table><thead><tr><th>Rotina</th><th>Quando roda</th><th>Atualizado em</th><th class="c2">Resultado</th><th>Situação</th><th></th></tr></thead><tbody>'
+   + ROT.map(r=>'<tr><td class="id" title="Fonte: '+r.f+' · próxima: '+r.px+'">'+r.n+'</td><td data-l="Quando roda">'+r.q+'</td><td data-l="Atualizado em">'+fdh(r.ul)+'</td><td class="c2" data-l="Resultado">'+r.l+'</td><td class="st">'+selo(r.st[0],r.st[1])+'</td><td class="acao"><button type="button" class="btn sm">Rodar agora</button></td></tr>').join('')
+   + '</tbody></table></div>';
+  return h;
+}
+function telaCfg(){
+  if(S.perfil!=='op') return semAcesso();
+  return '<div class="tit"><h1>Configurações</h1></div><div class="lista-mais">'
+   + [['rotinas','Rotinas','Robôs, horários e falhas'],['seguranca','Segurança e acessos','Quem acessa o quê, último acesso, verificação em duas etapas'],['lixeira','Lixeira','Itens excluídos nos últimos 90 dias']].map(x=>'<a href="#'+x[0]+'"><span style="flex:1"><b>'+x[1]+'</b><br><span class="small" style="color:var(--muted)">'+x[2]+'</span></span></a>').join('')+'</div>';
+}
+function placeholder(t, texto, extra){
+  return '<div class="tit"><h1>'+t+'</h1></div><div class="bloco"><p>'+texto+'</p>'+(extra||'')+'</div>';
+}
+function telaMais(){
+  const fora = MENU.filter(m=>!(m.op&&S.perfil!=='op') && !BARRA[S.perfil].includes(m.h));
+  return '<div class="tit"><h1>Mais</h1></div><div class="lista-mais">'+fora.map(m=>'<a href="#'+m.h+'">'+svg(m.i)+'<span>'+m.t+'</span></a>').join('')+'</div>';
+}
+
+/* ---------- roteador ---------- */
+function render(){
+  const r = rota();
+  document.body.className = 'r-'+r;
+  document.getElementById('pf-op').setAttribute('aria-pressed', S.perfil==='op');
+  document.getElementById('pf-socio').setAttribute('aria-pressed', S.perfil==='socio');
+  document.getElementById('usr-pf').textContent = S.perfil==='op'?'Operações':'Sócio';
+  document.getElementById('mes').hidden = r!=='compras';
+  if(r!=='decisao'){ document.getElementById('decbar').innerHTML=''; }
+  renderMenu(); renderUnid();
+  const pg = document.getElementById('pg');
+  const T = {
+    pendencias:[telaPend,bindPend], decisao:[telaDecisao,bindDecisao], pedidos:[telaPedidos,bindPedidos],
+    pedido:[telaFicha,bindFicha], visualizar:[telaVisual], documentos:[telaDocs,bindDocs], rotinas:[telaRotinas],
+    configuracoes:[telaCfg], mais:[telaMais],
+    premiacao:[()=>placeholder('Premiação','A Premiação continua no sistema atual até a fase de login único. Ela abre em nova aba, com o login próprio dela. Nenhum número da Premiação aparece aqui.','<div><a class="btn pri" href="#premiacao" aria-disabled="true">Abrir a Premiação em nova aba</a></div>')],
+    compras:[()=>placeholder('Contagem mensal de estoque','Exemplo de módulo mensal: o seletor de mês aparece no cabeçalho só aqui. Tela ainda não desenhada no protótipo.')],
+    pops:[()=>placeholder('POPs','Biblioteca, emissões e POPs específicos. Tela ainda não desenhada no protótipo.')],
+    reembolsos:[()=>placeholder('Reembolsos','Solicitações e pagamentos. A aprovação aparece na Central de pendências.','<div><a class="btn" href="#pendencias">Ir para as pendências</a></div>')],
+    cadastros:[()=>S.perfil!=='op'?semAcesso():placeholder('Cadastros','Unidades e empresas, pessoas, sócios, responsáveis técnicos, fornecedores e laboratórios, produtos.')],
+    seguranca:[()=>S.perfil!=='op'?semAcesso():placeholder('Segurança e acessos','Quem tem acesso a quê, último acesso, verificação em duas etapas e último backup testado.')],
+    lixeira:[()=>S.perfil!=='op'?semAcesso():placeholder('Lixeira','Itens excluídos nos últimos 90 dias. Restaurar fica no histórico.')]
+  };
+  const t = T[r] || T.pendencias;
+  pg.innerHTML = t[0]();
+  if(t[1]) t[1](pg);
+  if(r==='decisao') bindDecisao(pg);
+}
+document.getElementById('pf-op').onclick=()=>{S.perfil='op';S.lote.clear();S.feitoMsg=null;S.motivo=null;render();};
+document.getElementById('pf-socio').onclick=()=>{S.perfil='socio';S.lote.clear();S.feitoMsg=null;S.motivo=null;S.fSit='';render();};
+const usr=document.getElementById('usr'), usrpop=document.getElementById('usrpop');
+usr.onclick=()=>{usrpop.hidden=!usrpop.hidden; usr.setAttribute('aria-expanded',!usrpop.hidden);};
+document.addEventListener('click',e=>{
+  if(!e.target.isConnected) return;
+  if(!usr.contains(e.target)&&!usrpop.contains(e.target)) usrpop.hidden=true;
+  const w=document.getElementById('uwrap'); if(S.upop && !w.contains(e.target)){S.upop=false;renderUnid();}
+  if(S.maisAcoes && !e.target.closest('.fcab .ac')){S.maisAcoes=false;render();}
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ usrpop.hidden=true; if(S.upop){S.upop=false;renderUnid();} } });
+window.addEventListener('hashchange',()=>{ S.feitoMsg=null; S.motivo=null; S.maisAcoes=false; render(); window.scrollTo(0,0); });
+render();
+})();
+</script>
