@@ -18,6 +18,8 @@
 --      tipo pv: as 63 divergências com o pedido de venda do laboratório (pendPV) abertas no sistema antigo,
 --      importadas como estão (o pedido de venda foi lido fora do sistema; o antigo só guardou as diferenças).
 --  Nenhum dado existente é alterado.
+--  Aplicada em duas partes (a 1ª tentativa inteira caiu por tempo de resposta do servidor e não gravou nada):
+--  pedidos_novo_0016_notas_e_pv (estrutura e funções) e pedidos_novo_0016b_carga_notas_e_pv (a "carga inicial" do fim).
 -- =====================================================================
 
 -- ---------- formatação (padrão brasileiro, como o texto do antigo) ----------

@@ -21,7 +21,7 @@ conforme o documento de decisão do conselho de 26/11/2026.
 | Prescritor | Só o RT do termo da unidade com o laboratório |
 | Receita | Limita a quantidade pelo saldo (no começo só avisa) |
 | Paciente | Em alguns casos; identificado por código, nunca pelo nome |
-| Nº interno | DH-AAAA-NNNN |
+| Nº interno | DH-AAAA-NNNN (TST-AAAA-NNNN para pedido criado no ambiente de teste) |
 | Alertas | E-mail e tela do sistema |
 
 ## Estrutura (migrations)
@@ -56,7 +56,8 @@ quem é administrador ou financeiro cadastra um aplicativo autenticador (código
 
 Ações da API (POST com `acao`): `sessao`, `trocar_senha`, `inicio`, `pedidos`, `pedido`, `pagamentos`,
 `confirmar_recebimento`, `anexar_comprovante`, `baixar_sem_comprovante`, `cobranca_baixa`, `abrir_arquivo`,
-`editar_pedido`, `cancelar_pedido`, `reabrir_pedido` (só admin), `salvar_parcela`, `cancelar_parcela`, `produtos`, `salvar_itens`.
+`editar_pedido`, `cancelar_pedido`, `reabrir_pedido` (só admin), `salvar_parcela`, `cancelar_parcela`, `produtos`, `salvar_itens`
+(desde 27/11/2026 as correções pedem justificativa; ver "Criar pedido e Notas e PV").
 `unidades` (lista das unidades do usuário para o seletor do cabeçalho; 27/11/2026) e `inicio` aceita `unidade_id`.
 
 **Casca e ficha (27/11/2026):** a tela segue o kit do sistema único (menu lateral navy com Laboratórios › Pedidos / Pagamentos,
@@ -95,7 +96,7 @@ telas em `web/` (**não publicadas**).
   Conferência com o antigo para 11/2026: mesmas quantidades em 33 das 51 unidades; as 18 diferenças vêm dos itens/datas dos pedidos, que no sistema
   novo foram corrigidos pela NF/Omie depois do cálculo do antigo (05/11).
 - Fluxo Rascunho → Gerada (assina o RT do termo vigente; sem termo, não gera) → Enviada ao RT (só marca a data; **nenhum e-mail**).
-  Ajuste de quantidade pede justificativa e fica no registro de alterações. "Criar pedido" a partir da receita: botão desabilitado (próxima etapa).
+  Ajuste de quantidade pede justificativa e fica no registro de alterações. "Criar pedido" a partir da receita: liberado desde 27/11/2026 para receita gerada ou enviada ao RT (ver "Criar pedido e Notas e PV").
 
 **Termos** (menu Laboratórios › Termos): 36 termos de responsabilidade com o Centro Paulista do checklist das clínicas (status OK), com RT,
 data de emissão e nome do arquivo; o **arquivo continua no sistema antigo** até a cópia dos arquivos. Injemed: o antigo não tinha termo preenchido.
@@ -109,6 +110,73 @@ As telas novas são arquivos próprios (`web/receitas.js`, `web/cadastros.js`) c
 
 **Teste** (dados fictícios, Playwright 1366×768 e 390×844): 416 verificações, sem erro no console, sem rolagem horizontal nem interna,
 só 4 tamanhos de letra, nada repetido nas fichas.
+
+## Criar pedido e Notas e PV (27/11/2026 — entregas para a virada)
+
+Migrations `0015_criar_pedido.sql` e `0016_notas_e_pv.sql` (aplicadas; a 0016 em duas partes: `pedidos_novo_0016_notas_e_pv` e
+`pedidos_novo_0016b_carga_notas_e_pv`). Funções `pedidos-api` **v9** e `pedidos-historico` **v5** (publicadas). Telas novas em `web/`
+(`novo-pedido.js`, `notas.js`, ajustes em `app.js`, `receitas.js`, `index.html`, `app.css`) — **não publicadas** (o dono publica no Netlify).
+
+**Conferência dos dados (retrato antes × depois, `sistemas/nucleo/conferencia/retrato-*-0015/0016-2026-11-27.json`):** iguais —
+484 pedidos (R$ 5.248.612,23), 541 parcelas (R$ 3.647.979,81, mesmas somas por situação), 83 pagamentos (R$ 757.184,76), 377 NFs,
+1.599 itens de NF, 51 receitas, 325 itens de receita; hash linha a linha igual em pedido, item, parcela, pagamento, NF, receita e cópia do antigo.
+Registros novos só os previstos: 63 + 60 itens da fila e o parâmetro de teste.
+
+### Criar pedido (Laboratórios › Pedidos › Novo pedido, e "Criar pedido" na ficha da receita)
+- Nasce em **rascunho**: unidade, laboratório, receita do mês e itens. Pela receita, os itens vêm do **saldo** da receita
+  (receita − o que outros pedidos não cancelados dela já pediram) e a receita fica ligada ao pedido (`pedido_receita`); quem assinou a receita
+  (RT do termo) é o prescritor do pedido. Preço = tabela vigente no dia (produto sem preço aparece marcado).
+- **Centro Paulista exige receita** do mês já gerada (assinada pelo RT do termo); receita em rascunho não pode ser usada. Passar do saldo
+  **só avisa** (pede "estou ciente" no envio). Mudar os itens que vieram da receita pede **justificativa**.
+- Como no antigo, a criação **não pede forma de pagamento nem parcelas** (vêm depois, do laboratório/Omie), e **nenhuma data é inventada**:
+  a previsão fica em branco até o laboratório informar.
+- **Confirmar envio**: grava a data de envio (hoje), gera o número e registra no histórico ("Envio confirmado: nº …").
+  Cancelar rascunho pede motivo (nada é apagado).
+- **Numeração** (`pedidos_novo.proximo_num_interno`): DH-AAAA-NNNN por ano, sempre maior que o maior número do ano no sistema novo,
+  na cópia do antigo e no contador do antigo (`interno_dh`); trava no banco + tabela `numeracao` + número único: dois envios ao mesmo tempo
+  nunca repetem número. Hoje o próximo oficial seria **DH-2026-0478** (conferido numa simulação desfeita).
+- **Ambiente de teste** (enquanto o sistema antigo estiver em uso): a tela mostra "Ambiente de teste — o pedido não é enviado ao laboratório";
+  o pedido fica com `teste = true` e recebe número **TST-AAAA-NNNN** (o prefixo de teste que o antigo já usava), para não gastar números DH
+  que o antigo ainda está emitindo. A marca de teste não pode ser trocada depois.
+  **Antes da virada:** `select pedidos_novo.apagar_pedidos_teste();` (apaga só `teste = true`, com itens, parcelas, comprovantes de teste,
+  ligações e fila; não toca nos 484 migrados) e `update pedidos_novo.parametro set valor = 'false' where chave = 'criar_pedido_teste';`
+  (a partir daí o número é DH).
+- **Correções com justificativa:** editar dados, itens ou parcela de pedido já enviado passou a exigir justificativa, que vai para o
+  registro de alterações (`evento.justificativa`, a mesma ideia do núcleo) e aparece no Histórico da ficha. Cancelamentos usam o motivo.
+
+### Notas e PV (Laboratórios › Notas e PV; contadores no Início)
+- **Conferência pedido × NF** (`pedidos_novo.conferir_pedido_nf`, recalculável): a mesma regra do antigo (função `conferir()` do
+  `omie-sync`): soma as NFs não canceladas do pedido; bonificação (CFOP 5910/6910) soma quantidade e não valor; item do pedido × vendido
+  (+ bonificado); item da NF fora da tabela; preço × tabela vigente na emissão; frete; valor (com ou sem frete); cobrado pelo laboratório
+  (parcelas da Omie) × NF; tolerância de R$ 0,50. Recalcula pelo botão "Recalcular conferência", ao editar itens/frete/parcelas e na decisão "Corrigido".
+- **Resultado:** 319 pedidos conferidos, **60 com diferença**. Reproduz **as 58** divergentes do antigo (58 de 58) e acrescenta 2:
+  DH-2026-0130 e DH-2026-0131 (pedidos 125076 e 125076-2), porque no sistema novo a NF 70511 está ligada aos dois pedidos e a soma deles
+  (R$ 37.350,00) não bate com a NF (R$ 18.675,00) — provável pedido duplicado. Conferidos: 320 no antigo × 319 no novo porque as NFs 76659
+  e 74978 não têm itens no sistema novo (pedidos DH-2026-0354 e 0371) e o 125076-2 passou a ser conferido.
+- **Adaptações (para reproduzir com os dados do novo):** (1) o "valor do pedido" do antigo era um campo da planilha/PV que o novo não tem:
+  o valor agora é itens + frete do sistema novo, e o valor do antigo entra como linha própria "Valor informado no sistema antigo" nos
+  pedidos migrados (é o que mantém as 15 divergências que no antigo eram só de valor); (2) NF ligada a mais de um pedido confere o grupo
+  junto (no antigo cada NF tinha um pedido só); (3) "tabela vigente desde" mostra 23/07/26 (o antigo repetia o mesmo preço com data 27/07/26).
+- **Divergências com o pedido de venda (PV):** as **63** abertas no antigo foram trazidas como estavam (o PV era lido fora do sistema e o antigo
+  só guardou as diferenças, então não há como recalcular). Na tela, cada linha "campo: sistema A · pedido de venda B" vira colunas e mostra
+  o que o sistema tem **hoje** (igual ao PV / diferente / sem este dado no sistema novo). A regra do `importar-pv` ficou pronta em
+  `pedidos_novo.divergencias_pv(pedido, pv)` para quando o PV for lido no sistema novo.
+- **Fila** (`pedidos_novo.divergencia`): uma linha por pedido e diferença, com dono (Operações; "Laboratório" quando marcada para cobrar).
+  Decisões, sempre com justificativa: **aceitar a diferença**, **cobrar o laboratório** (continua aberta, com o laboratório) ou **corrigido**
+  (na NF o sistema confere de novo e só aceita se a diferença sumiu). Item da NF fecha sozinho quando a conferência passa a bater; se
+  mudar, o antigo vira "substituído" e entra um novo. Administrador pode reabrir. Lista em colunas com filtros (tipo, situação, com quem,
+  laboratório, busca) + filtro de unidade do cabeçalho; cada item abre com pedido × nota (ou × PV) lado a lado, documentos (DANFE/XML/PV),
+  decisão, histórico e botão **Próxima**. O financeiro vê só a parte da NF (o PV tem prescritor e CRBM).
+
+Novas ações da API: `np_opcoes`, `np_receitas`, `np_criar`, `np_rascunho`, `np_salvar`, `np_enviar`, `notas_lista`, `notas_item`,
+`notas_decidir`, `notas_recalcular`; `editar_pedido`, `salvar_itens` e `salvar_parcela` (edição) agora exigem `justificativa`.
+
+**Teste** (dados fictícios, Playwright 1366×768 e 390×844): 774 verificações (as 594 anteriores, com as telas de edição pedindo justificativa,
+e as novas de Novo pedido, rascunho, envio, receita → pedido, fila Notas e PV, decisão, Próxima e Início), sem erro no console, sem rolagem
+horizontal nem interna, só 4 tamanhos de letra, uma informação por célula.
+
+**Fora desta entrega:** ler o PDF do pedido de venda dentro do sistema (continua fora; a regra está pronta); copiar os arquivos do antigo
+(DANFE/PV do antigo aparecem como "no sistema antigo"); ligar a numeração oficial (só na virada, depois de apagar os pedidos de teste).
 
 ## Robôs (conectores)
 

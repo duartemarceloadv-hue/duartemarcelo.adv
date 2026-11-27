@@ -13,6 +13,7 @@ Banco único `xqxjmeioodmdhxhivyqu`. Nada de `public`, `premiacao*` ou `nutra` f
 | 3. Receitas do mês e termos | `../pedidos/supabase/migrations/0013_receitas_e_termos.sql` | **sim** (`pedidos_novo_0013_receitas_e_termos`) |
 | 4. Funções `pedidos-api` (v7) e `pedidos-historico` (v3) | `../pedidos/supabase/functions/` | **publicadas** |
 | 5. Telas (`web/`) | `../pedidos/web/` | **não publicadas** (o dono publica no Netlify `pedidos-novo-drhair`) |
+| 6. Criar pedido e Notas e PV | `../pedidos/supabase/migrations/0015_criar_pedido.sql`, `0016_notas_e_pv.sql`; `pedidos-api` v9, `pedidos-historico` v5 | **sim** (27/11/2026; retrato antes/depois idêntico: `conferencia/retrato-antes-0015-2026-11-27.json`, `retrato-depois-0016-2026-11-27.json`) |
 
 Se for preciso refazer do zero num banco de teste, a ordem é 1 → 2 → 3 → 4 → 5. A conferência é `conferencia/retrato.sql`
 antes do passo 2 e depois do passo 3 (contagens e somas em R$ iguais; só `pessoa` e `evento` mudam, ver `retrato-depois-…json`).
