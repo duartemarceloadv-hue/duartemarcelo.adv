@@ -135,8 +135,8 @@ async function planilha(c: Ctx) {
           if (!c.simular) await tx`insert into pedidos_novo.etapa_lab (pedido_id, etapa, previsao, origem) values (${p.id}, ${etapa}, ${prevLab}, 'planilha')`;
         }
         const prev = data(g("previsao"));
-        // previsão só é preenchida quando vazia: no sistema novo ela define o prazo/atraso do laboratório
-        if (prev && !p.prev) { mud.push(`previsão: ${prev}`); if (!c.simular) await tx`update pedidos_novo.pedido set previsao_envio = ${prev} where id = ${p.id} and previsao_envio is null`; }
+        // previsão: vale só a informada pelo laboratório na planilha (nunca inventada); copia sempre que houver data
+        if (prev && prev !== p.prev) { mud.push(`previsão: ${p.prev || "—"} → ${prev}`); if (!c.simular) await tx`update pedidos_novo.pedido set previsao_envio = ${prev} where id = ${p.id}`; }
         const env = data(g("envio"));
         if (env && env <= HOJE && !p.exp) { mud.push(`saída do laboratório: ${env}`); if (!c.simular) await tx`update pedidos_novo.pedido set expedido_em = ${env} where id = ${p.id} and expedido_em is null`; }
         const obs = limpa(g("obs"));

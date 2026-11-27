@@ -69,6 +69,10 @@ com a chave guardada no Vault (`pedidos_novo_cron_key`; no código só o SHA-256
 
 | Robô | Quando (Brasília) | O que faz |
 |---|---|---|
-| `planilha` | 07:00 | Lê a planilha "Dr Hair - controle Edu" (aba 1). Etapa do laboratório e previsão do lab. (histórico em `etapa_lab`), previsão do pedido e saída do laboratório só quando vazias, observação só quando vazia, liga NFs ao pedido, "Data Pagto" = baixa na planilha da 1ª parcela. Pedidos da planilha que não existem no sistema viram alerta. |
+| `planilha` | 07:00 | Lê a planilha "Dr Hair - controle Edu" (aba 1). Etapa do laboratório e previsão do lab. (histórico em `etapa_lab`), previsão do pedido = a da planilha (nunca inventada; regra do dono 27/11/2026), saída do laboratório só quando vazia, observação só quando vazia, liga NFs ao pedido, "Data Pagto" = baixa na planilha da 1ª parcela. Pedidos da planilha que não existem no sistema viram alerta. |
 | `rastreio` | 07:20 | Consulta a Quality por NF + CNPJ da unidade (pedidos do Centro Paulista não recebidos). Grava situação do rastreio, saída (se vazia) e entrega (quando todas as NFs foram entregues). Retirada em Sorocaba = entregue. |
 | Omie | — | Ainda depende da tarefa "Sincronizar Portal Omie" (computador do dono), que hoje envia só ao sistema atual. |
+
+**Regra: nenhuma data inventada (27/11/2026).** Previsão só a informada pelo laboratório; o prazo de 30 dias serve
+apenas para marcar atraso. As 2 datas de recebimento estimadas na migração (envio + 2 dias) foram apagadas
+(DH-2026-0014 e DH-2026-0211, ficam para confirmar).
