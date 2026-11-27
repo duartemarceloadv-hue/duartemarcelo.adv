@@ -93,12 +93,16 @@ export function acoesReceitas(D: Dep) {
     if (!c.todas) throw new Erro(403, "Gerar as receitas do mês é feito pela central (todas as unidades).");
     const mes = mesOk(b.mes);
     const simular = b.simular !== false;
+    // Individual (uma unidade) ou em lote (várias); sem lista = todas as unidades ativas.
+    const lista = Array.isArray(b.unidades) ? b.unidades : (b.unidade_id ? [b.unidade_id] : []);
+    if (lista.length > 200) throw new Erro(400, "Unidades demais.");
+    const uns: string[] | null = lista.length ? lista.map((x: any) => uuid(x, "unidade")) : null;
     if (simular) {
-      const [x] = await sql`select pedidos_novo.gerar_receitas_mes(${mes}::date, true) r`;
+      const [x] = await sql`select pedidos_novo.gerar_receitas_mes(${mes}::date, true, ${uns}::uuid[]) r`;
       return x.r;
     }
     return await comAuditoria(c, async (tx) => {
-      const [x] = await tx`select pedidos_novo.gerar_receitas_mes(${mes}::date, false) r`;
+      const [x] = await tx`select pedidos_novo.gerar_receitas_mes(${mes}::date, false, ${uns}::uuid[]) r`;
       const r = x.r;
       return { ...r, ok: true, mensagem: `Receitas de ${mes.slice(5, 7)}/${mes.slice(0, 4)}: ${plural(r.criadas, "criada", "criadas")} em rascunho, ${plural(r.atualizadas, "rascunho recalculado", "rascunhos recalculados")}, ${plural(r.ignoradas, "já gerada ou enviada (não mexida)", "já geradas ou enviadas (não mexidas)")}.` };
     });
