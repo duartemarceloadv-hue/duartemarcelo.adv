@@ -479,4 +479,6 @@ grant execute on function public.nut_rodada_auto()                              
 --    O legado continua sendo o sistema em uso até a virada.
 -- ---------------------------------------------------------------------
 select cron.schedule('nutra-rodada-dia-01', '0 10 1 * *', 'select public.nut_rodada_auto()');
-update cron.job set active = false where jobname = 'nutra-rodada-dia-01';
+-- (equivale a: update cron.job set active = false where jobname = 'nutra-rodada-dia-01';
+--  feito via cron.alter_job porque o papel da migração não tem UPDATE direto em cron.job)
+select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'nutra-rodada-dia-01'), active := false);
