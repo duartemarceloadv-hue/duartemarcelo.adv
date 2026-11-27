@@ -28,3 +28,5 @@ O dono NÃO quer pagar o Pro agora (máximo US$ 25/mês). Decisão: comprimir os
 - Função `apoio-compressao-teste` (token; hash no código) é ligada só durante a troca e desligada (410) ao fim de cada etapa. Scripts: `compressao-documentos/etapa.py` (baixa e comprime) e `trocar.py` (troca e confere o hash do que voltou).
 - 27/11 Moinhos: 19 partes no Drive; 24 de 29 arquivos trocados, todos conferidos; 59,0 MB -> 7,3 MB. Bucket: 853 -> 801 MB. Aguardando o dono conferir Moinhos no sistema antes das demais lojas.
 - Observação: a coluna public.arquivos.tamanho guarda o tamanho antigo (não alterada; sistema em uso).
+- 27/11 demais 52 lojas: 257 partes no Drive (conferidas por quantidade e tamanho antes da troca); 736/736 arquivos trocados e conferidos por hash. Bucket `documentos`: 853 MB -> 368,8 MB; 1.015 arquivos; 0 cadastros apontando para arquivo inexistente. Função `apoio-compressao-teste` desligada (410). CONCLUÍDO.
+- Próximo: copiar os ~198 MB de anexos do Pedidos antigo para o projeto novo (somente leitura no antigo) e fazer o sistema novo comprimir todo arquivo enviado.
