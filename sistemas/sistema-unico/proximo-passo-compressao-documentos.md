@@ -21,3 +21,10 @@ O dono NÃO quer pagar o Pro agora (máximo US$ 25/mês). Decisão: comprimir os
 - Copiar os ~198 MB de anexos do Pedidos antigo (ckgsdvhkpnrrmctlqtma, somente leitura) para o projeto novo.
 - Sistema novo comprime automaticamente todo arquivo enviado.
 - Publicar no Netlify as telas Criar pedido e Notas e PV (commit 2f4ac7e, ainda não publicadas).
+
+## Andamento
+- Drive de Operações: pasta "Originais - Sistema de Documentos (cópia de segurança)" (id 1vF5qZct7hXC7km1SVAYXBRH4bz0FZEcF), uma subpasta por loja.
+- Limite do conector do Drive: ~3 MB por envio. Originais de cada loja vão em 7-Zip dividido em partes de 3.000 KB (`7z a -mx=1 -v3000k`), conferidos por extração antes do envio.
+- Função `apoio-compressao-teste` (token; hash no código) é ligada só durante a troca e desligada (410) ao fim de cada etapa. Scripts: `compressao-documentos/etapa.py` (baixa e comprime) e `trocar.py` (troca e confere o hash do que voltou).
+- 27/11 Moinhos: 19 partes no Drive; 24 de 29 arquivos trocados, todos conferidos; 59,0 MB -> 7,3 MB. Bucket: 853 -> 801 MB. Aguardando o dono conferir Moinhos no sistema antes das demais lojas.
+- Observação: a coluna public.arquivos.tamanho guarda o tamanho antigo (não alterada; sistema em uso).
