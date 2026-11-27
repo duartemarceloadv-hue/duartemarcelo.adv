@@ -45,7 +45,7 @@ function lerXML(x: string) {
 function b64bytes(s: string) { const bin = atob(s.replace(/^data:[^,]*,/, "")); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
 const hexHash = async (b: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", b))].map((x) => x.toString(16).padStart(2, "0")).join("");
 
-type R = { recebidos: number; notas: number; ligadas: string[]; criados: string[]; semPedido: string[]; canceladas: string[]; parcelas: number; baixas: number; anexados: string[]; erros: string[] };
+type R = { recebidos: number; notas: number; ligadas: string[]; criados: string[]; semPedido: string[]; canceladas: string[]; parcelas: number; baixas: number; novas: string[]; anexados: string[]; erros: string[] };
 
 let SIMULAR = false;
 class Desfaz extends Error {}
@@ -148,6 +148,7 @@ async function processaNF(d: any, mapa: Record<string, string>, res: R) {
         await t`update pedidos_novo.parcela set ${t(dados)} where id = ${pa.id}`;
       } else {
         await t`insert into pedidos_novo.parcela ${t({ ...dados, pedido_id: ped.id, n: 900 + (q.num || 1), de: 999, forma: dados.forma || "outro", origem: "omie" })}`;
+        res.novas.push(`${ped.num_interno} NF ${nf} ${q.num}/${q.de} venc ${q.venc} R$ ${q.valor}`);
         mexeu = true;
       }
       res.parcelas++;
@@ -207,7 +208,7 @@ Deno.serve(async (req) => {
   SIMULAR = b.simular === true;
   if (SIMULAR && Array.isArray(b.anexar) && b.anexar.length) return J({ erro: "simulação não aceita anexos" }, 400);
   const docs = (b.docs || []).filter((d: any) => d?.type === "nfe" && d?.data?.numero_nota);
-  const res: R = { recebidos: docs.length, notas: 0, ligadas: [], criados: [], semPedido: [], canceladas: [], parcelas: 0, baixas: 0, anexados: [], erros: [] };
+  const res: R = { recebidos: docs.length, notas: 0, ligadas: [], criados: [], semPedido: [], canceladas: [], parcelas: 0, baixas: 0, novas: [], anexados: [], erros: [] };
   const [ex] = SIMULAR ? [{ id: null }] : await sql`insert into pedidos_novo.execucao_conector (conector, laboratorio_id) values ('omie', ${LAB}) returning id`;
   const mapa: Record<string, string> = {};
   for (const [k, v] of Object.entries(b.mapa || {})) mapa[nfNum(k)] = String(v);
@@ -224,7 +225,7 @@ Deno.serve(async (req) => {
     } catch (e) { res.erros.push(`conferência NF ${c.nf}: ${(e as Error).message}`); }
   }
   const status = res.erros.length ? (res.notas || res.anexados.length ? "parcial" : "erro") : "ok";
-  const resumo = { lote: b.lote || null, ligadas: res.ligadas.slice(0, 200), criados: res.criados, semPedido: res.semPedido.slice(0, 200), canceladas: res.canceladas, anexados: res.anexados.slice(0, 200), baixas: res.baixas, parcelas: res.parcelas };
+  const resumo = { lote: b.lote || null, ligadas: res.ligadas.slice(0, 200), criados: res.criados, semPedido: res.semPedido.slice(0, 200), canceladas: res.canceladas, anexados: res.anexados.slice(0, 200), baixas: res.baixas, parcelas: res.parcelas, novas: res.novas.slice(0, 200) };
   if (ex.id) await sql`update pedidos_novo.execucao_conector set fim = now(), status = ${status}, lidos = ${res.recebidos + (b.anexar?.length || 0) + (b.conf?.length || 0)},
     aplicados = ${res.parcelas + res.anexados.length + res.ligadas.length}, erros = ${sql.json(res.erros.slice(0, 100))}, resumo = ${sql.json(resumo)} where id = ${ex.id}`;
   return J({ ...res, simulado: SIMULAR });
