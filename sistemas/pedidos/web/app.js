@@ -28,11 +28,13 @@ var SIT_P={E:['Enviado ao laboratório, aguardando produção','t-blue'],L:['Con
 var SIT_PC={
   V:['Vencida e sem pagamento','t-red','Pagar — vencidas de verdade','Pagar esta parcela','--red'],
   A:['A vencer','t-blue','Pagar no vencimento','Pagar esta parcela','--blue'],
-  P:['Paga por nós, falta a baixa na Omie','t-amber','Cobrar baixa na Omie','Cobrar baixa','--amber'],
-  B:['Baixa só na planilha — conferir','t-amber','Conferir pela forma de pagamento (boleto pendente?)','Conferir','--amber'],
-  Q:['Baixada na Omie — paga','t-green','Nada a fazer','','--green'],
+  P:['Falta baixa na Omie','t-amber','Pedir ao laboratório a baixa na Omie','Pedir baixa','--amber'],
+  N:['Falta nossa baixa no sistema','t-amber','Dar baixa no sistema (comprovante ou sem comprovante)','Dar baixa','--amber'],
+  B:['Falta baixa na planilha do laboratório','t-amber','Pedir ao laboratório atualizar a planilha','Pedir atualização','--amber'],
+  Q:['Finalizada — 3 baixas','t-green','Nada a fazer','','--green'],
   X:['Cancelada','t-gray','Nada a fazer','','--gray']};
 var FORMA={cartao:'Cartão',pix:'PIX',boleto:'Boleto',outro:'Outra forma'};
+function marca(d,exige){if(exige===false)return '<span class="fraco">não se aplica</span>';return d?'<span class="ok">✓</span> '+dt(d):'<span class="nao">✗</span> falta'}
 function tag(t){return '<span class="tag '+t[1]+'">'+esc(t[0])+'</span>'}
 
 /* ---------- API ---------- */
@@ -178,9 +180,10 @@ function defCartoes(d){
   var c=d.cartoes;
   return [
    {g:'Financeiro',itens:[
-    {acao:'Conferir — baixa só na planilha',det:'A planilha do laboratório diz pago, mas a Omie ainda não baixou. Conferir pela forma de pagamento (ex.: boleto pendente).',c:'--amber',r:c.B,ir:['pagamentos','B']},
-    {acao:'Cobrar baixa na Omie',det:'Pagamos (com comprovante), mas a Omie do laboratório ainda não deu baixa.',c:'--amber',r:c.P,ir:['pagamentos','P']},
-    {acao:'Pagar — vencidas de verdade',det:'Venceram, sem baixa na Omie, sem baixa na planilha e sem comprovante nosso.',c:'--red',r:c.V,ir:['pagamentos','V']},
+    {acao:'Pedir baixa na Omie ao laboratório',det:'Falta a baixa na Omie (o controle do laboratório). Sem ela o pagamento não finaliza.',c:'--amber',r:c.P,ir:['pagamentos','P']},
+    {acao:'Dar baixa no sistema',det:'Omie e planilha já baixaram; falta a nossa baixa (comprovante, ou baixa sem comprovante conferida pela Omie).',c:'--amber',r:c.N,ir:['pagamentos','N']},
+    {acao:'Pedir atualização da planilha',det:'A Omie já baixou, mas a planilha do laboratório não. Pendência de informação.',c:'--amber',r:c.B,ir:['pagamentos','B']},
+    {acao:'Pagar — vencidas de verdade',det:'Venceram sem nenhuma das 3 baixas (Omie, planilha e nosso sistema).',c:'--red',r:c.V,ir:['pagamentos','V']},
     {acao:'Pagar — vencem nos próximos 7 dias',det:'Vencem até '+dt(d.h7)+'.',c:'--blue',r:c.A7,ir:['pagamentos','A7']}]},
    {g:'Laboratório',itens:[
     {acao:'Cobrar laboratório — passou do prazo de 30 dias',det:'Ainda não saíram do laboratório e já passou o prazo.',c:'--red',r:c.atraso,ir:['pedidos','atraso']},
@@ -219,9 +222,9 @@ function campo(rot,html){return '<label class="campo"><span>'+esc(rot)+'</span>'
 function filtrosAtivos(){return !!(estado.sit||estado.lab||estado.acao||estado.pUn||estado.pDe||estado.pAte||estado.pPag||estado.busca||estado.especial)}
 function resumoParc(x){
   if(!x.n) return '<span class="fraco">sem parcelas</span>';
-  var h='<span class="num">'+x.ok+'/'+x.n+' pagas</span>';
+  var h='<span class="num">'+x.ok+'/'+x.n+' finalizadas</span>';
   if(x.venc) h+=' <span class="tag t-red mini">'+x.venc+' vencida'+(x.venc>1?'s':'')+'</span>';
-  if(x.semComp) h+=' <span class="tag t-amber mini">'+x.semComp+' sem compr.</span>';
+  if(x.pend) h+=' <span class="tag t-amber mini">'+x.pend+' pend. de baixa</span>';
   if(x.falta>0) h+='<span class="sub2">falta '+R(x.falta)+(x.prox?' · vence '+dt(x.prox).slice(0,5):'')+'</span>';
   return h;
 }
@@ -234,7 +237,7 @@ function telaPedidos(d){
    campo('Unidade','<select class="sel" data-pf="pUn">'+opt('','Todas',estado.pUn)+uns.map(function(u){return opt(u.id,u.nome,estado.pUn)}).join('')+'</select>')+
    campo('Laboratório','<select class="sel" data-pf="lab">'+opt('','Todos',estado.lab)+opt('CP','Centro Paulista',estado.lab)+opt('INJ','Injemed',estado.lab)+'</select>')+
    campo('Situação','<select class="sel" data-pf="sit">'+opt('','Todas',estado.sit)+opt('E','No laboratório',estado.sit)+opt('L','Confirmado pelo lab.',estado.sit)+opt('C','A caminho',estado.sit)+opt('R','Recebidos',estado.sit)+opt('X','Cancelados',estado.sit)+'</select>')+
-   campo('Pagamento','<select class="sel" data-pf="pPag">'+opt('','Todos',estado.pPag)+opt('V','Com parcela vencida',estado.pPag)+opt('aberto','Com parcela a pagar',estado.pPag)+opt('P','Pago, falta baixa do lab.',estado.pPag)+opt('B','Baixado, falta comprovante',estado.pPag)+opt('sem','Sem parcelas',estado.pPag)+'</select>')+
+   campo('Pagamento','<select class="sel" data-pf="pPag">'+opt('','Todos',estado.pPag)+opt('V','Com parcela vencida',estado.pPag)+opt('aberto','Com parcela a pagar',estado.pPag)+opt('P','Falta baixa na Omie',estado.pPag)+opt('B','Falta baixa na planilha',estado.pPag)+opt('N','Falta nossa baixa',estado.pPag)+opt('sem','Sem parcelas',estado.pPag)+'</select>')+
    campo('Enviado de','<input class="sel" type="date" data-pf="pDe" value="'+esc(estado.pDe||'')+'">')+
    campo('até','<input class="sel" type="date" data-pf="pAte" value="'+esc(estado.pAte||'')+'">')+
    campo('Ordenar por','<select class="sel" data-pf="pOrdem">'+opt('urgencia','Mais urgente primeiro',estado.pOrdem)+opt('recentes','Envio mais recente',estado.pOrdem)+opt('antigos','Envio mais antigo',estado.pOrdem)+opt('atraso','Mais dias de atraso',estado.pOrdem)+opt('valor','Maior valor',estado.pOrdem)+opt('unidade','Unidade (A–Z)',estado.pOrdem)+'</select>')+
@@ -283,12 +286,13 @@ async function carregarPedidos(anexar){
 var GRUPOS=[
   {id:'V',f:function(x){return x.sit==='V'},sel:true},
   {id:'A7',f:function(x){return x.prox7},nome:'Vencem nos próximos 7 dias',acao:'Pagar até o vencimento',cor:'--blue',sel:true},
-  {id:'P',f:function(x){return x.sit==='P'},cob:true},
-  {id:'B',f:function(x){return x.sit==='B'},sel:true},
+  {id:'P',f:function(x){return x.sit==='P'},cob:true,sel:true},
+  {id:'N',f:function(x){return x.sit==='N'},sel:true,semComp:true},
+  {id:'B',f:function(x){return x.sit==='B'},cob:true},
   {id:'A',f:function(x){return x.sit==='A'&&!x.prox7},nome:'A vencer (depois de 7 dias)',acao:'Nada a fazer agora — pagar no vencimento',cor:'--blue',sel:true},
   {id:'Q',f:function(x){return x.sit==='Q'}},
   {id:'X',f:function(x){return x.sit==='X'}}];
-var GRUPO_TXT={V:'Venceram sem baixa na Omie, sem baixa na planilha e sem comprovante nosso.',P:'Temos o comprovante, mas a Omie do laboratório ainda não deu baixa.',B:'A planilha do laboratório diz pago, mas a Omie ainda não baixou. Conferir pela forma de pagamento: boleto pode estar pendente.',A:'Vencimento mais distante.',Q:'Baixadas na Omie (o controle do laboratório). Comprovante não é obrigatório.',X:'Canceladas, não precisam ser pagas.'};
+var GRUPO_TXT={V:'Venceram sem nenhuma das 3 baixas: Omie, planilha do laboratório e nosso sistema.',P:'A Omie do laboratório ainda não baixou. Sem a Omie o pagamento não finaliza.',N:'Omie e planilha já baixaram. Falta a nossa baixa: anexe o comprovante ou dê baixa sem comprovante (vale porque a Omie já baixou).',B:'A Omie já baixou, mas a planilha do laboratório não. Pendência de informação: pedir ao laboratório atualizar.',A:'Vencimento mais distante.',Q:'Finalizadas: Omie, planilha e nosso sistema baixados.',X:'Canceladas, não precisam ser pagas.'};
 function selecionadas(){var d=cache.pag;if(!d)return [];return d.parcelas.filter(function(x){return estado.sel[x.id]})}
 function telaPagamentos(d){
   if(!d) return '<h2>Pagamentos</h2><p class="sub">Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.</p><p class="vazio">Carregando as parcelas…</p>';
@@ -324,16 +328,17 @@ function telaPagamentos(d){
      '<span class="tot"><b>'+R(l.reduce(function(t,x){return t+x.valor},0))+'</b><span>'+plural(l.length,'parcela','parcelas')+' · '+(aberto?'ocultar':'ver lista')+'</span></span></button>';
     if(aberto&&l.length){
       h+='<div class="gp-corpo">';
-      if(g.cob) h+='<div class="gp-acoes">'+(estado.unid?'<button type="button" class="botao mini" data-cob-un="'+esc(estado.unid)+'">Gerar cobrança de baixa desta unidade</button><span>Monta a mensagem para o laboratório, com datas e valores. Nada é enviado.</span>':'<span>Para gerar a mensagem de cobrança, escolha a unidade acima (ou abra um pedido).</span>')+'</div>';
+      if(g.cob) h+='<div class="gp-acoes">'+(estado.unid?'<button type="button" class="botao mini" data-cob-un="'+esc(estado.unid)+'">Gerar mensagem ao laboratório desta unidade</button><span>Pede a baixa na Omie e/ou na planilha, com datas e valores. Nada é enviado.</span>':'<span>Para gerar a mensagem ao laboratório, escolha a unidade acima (ou abra um pedido).</span>')+'</div>';
       if(g.sel&&pode) h+='<div class="gp-acoes"><span>Marque as parcelas pagas com um mesmo comprovante (todas da mesma unidade).</span></div>';
-      h+='<div class="tabela sem-borda"><table class="tp"><thead><tr><th class="sel-c"></th><th>Nº DH / lab.</th><th>Unidade</th><th>Lab.</th><th>Parcela</th><th>Vencimento</th><th class="r">Valor</th><th class="r">Pago por nós</th><th>Baixa planilha</th><th>Baixa Omie</th><th>Forma</th></tr></thead><tbody>';
+      h+='<div class="tabela sem-borda"><table class="tp"><thead><tr><th class="sel-c"></th><th>Nº DH / lab.</th><th>Unidade</th><th>Lab.</th><th>Parcela</th><th>Vencimento</th><th class="r">Valor</th><th>Baixa Omie</th><th>Baixa planilha</th><th>Nosso sistema</th><th>Forma</th></tr></thead><tbody>';
       l.slice(0,lim).forEach(function(x){
         var marcavel=g.sel&&pode&&x.livre>0;
         h+='<tr class="lp" data-p="'+esc(x.pedido_id)+'" tabindex="0"><td class="sel-c">'+(marcavel?'<input type="checkbox" data-selp="'+esc(x.id)+'" aria-label="Marcar parcela '+x.n+'/'+x.de+' do pedido '+esc(x.num)+'"'+(estado.sel[x.id]?' checked':'')+'>':'')+'</td>'+
          '<td><b class="dh">'+esc(x.num)+'</b><span class="sub2">'+esc(x.numLab||'—')+'</span></td><td class="c-un">'+esc(x.un)+'</td><td>'+esc(x.lab==='CP'?'C. Paulista':x.labNome)+'</td>'+
          '<td class="num">'+x.n+'/'+x.de+'</td><td class="num">'+dt(x.venc)+(x.atrasoDias>0?'<span class="sub2 vermelho">há '+x.atrasoDias+' dias</span>':'')+'</td>'+
-         '<td class="r num"><b>'+R(x.valor)+'</b></td><td class="r num">'+(x.pago?R(x.pago)+(x.pagoEm?'<span class="sub2">'+dt(x.pagoEm)+'</span>':''):'<span class="fraco">—</span>')+'</td>'+
-         '<td class="num">'+(x.bPlan?dt(x.bPlan):'<span class="fraco">—</span>')+'</td><td class="num">'+(x.bOmie?dt(x.bOmie):'<span class="fraco">—</span>')+'</td>'+
+         '<td class="r num"><b>'+R(x.valor)+'</b></td>'+
+         '<td class="num">'+marca(x.bOmie,x.exOmie)+'</td><td class="num">'+marca(x.bPlan,x.exPlan)+'</td>'+
+         '<td class="num">'+(x.nossa?'<span class="ok">✓</span> '+(x.pago>=x.valor-0.01?'comprovante'+(x.pagoEm?' '+dt(x.pagoEm):''):'sem compr. '+dt(x.bSis)):(x.pago?'<span class="fraco">parcial '+R(x.pago)+'</span>':'<span class="nao">✗</span>'))+'</td>'+
          '<td class="nw">'+esc(FORMA[x.forma]||x.forma)+'</td></tr>';
       });
       h+='</tbody></table></div>';
@@ -346,7 +351,7 @@ function telaPagamentos(d){
   if(sl.length){
     var uns=new Set(sl.map(function(x){return x.unidade_id}));
     h+='<div class="barra-sel" id="barra-sel"><span>'+plural(sl.length,'parcela marcada','parcelas marcadas')+' · falta pagar '+R(sl.reduce(function(t,x){return t+x.livre},0))+(uns.size>1?' · <b>atenção: unidades diferentes</b>':'')+'</span>'+
-      '<button type="button" class="botao sec mini" id="limpar-sel">Desmarcar</button><button type="button" class="botao mini" id="anexar-sel"'+(uns.size>1?' disabled':'')+'>Anexar comprovante</button></div>';
+      '<button type="button" class="botao sec mini" id="limpar-sel">Desmarcar</button>'+(sl.every(function(x){return x.bOmie})?'<button type="button" class="botao sec mini" id="baixa-sel">Dar baixa sem comprovante</button>':'')+'<button type="button" class="botao mini" id="anexar-sel"'+(uns.size>1?' disabled':'')+'>Anexar comprovante</button></div>';
   }
   return h;
 }
@@ -358,26 +363,26 @@ async function carregarPagamentos(){
 /* ---------- ficha do pedido ---------- */
 function ficha(d){
   var p=d.pedido, lab=d.lab, pode=d.pode_gravar;
-  var pagas=p.parc.filter(function(x){return x.sit==='Q'||x.sit==='P'}).length, ativas=p.parc.filter(function(x){return x.sit!=='X'});
+  var pagas=p.parc.filter(function(x){return x.sit==='Q'}).length, ativas=p.parc.filter(function(x){return x.sit!=='X'});
   var pagoEm=p.parc.map(function(x){return x.pagoEm}).filter(Boolean).sort()[0];
   var vencidas=p.parc.some(function(x){return x.sit==='V'});
   var canc=p.sit==='X';
   var et=[
     {n:'Pedido',d:dt(p.env),e:'enviado ao laboratório',c:p.env?'ok':''},
-    {n:'Pagamento',d:ativas.length?(pagas+' de '+ativas.length+' pagas'):'sem parcelas',e:pagoEm?'1º pagamento '+dt(pagoEm):(ativas.some(function(x){return x.sit==='B'})?'baixa do lab., sem comprovante':''),c:vencidas?'ruim':(ativas.length&&pagas===ativas.length?'ok':(ativas.length?'atencao':''))},
+    {n:'Pagamento',d:ativas.length?(pagas+' de '+ativas.length+' finalizadas'):'sem parcelas',e:ativas.some(function(x){return x.sit==='P'||x.sit==='B'||x.sit==='N'})?'há baixas pendentes':(pagoEm?'1º pagamento '+dt(pagoEm):''),c:vencidas?'ruim':(ativas.length&&pagas===ativas.length?'ok':(ativas.length?'atencao':''))},
     {n:'Laboratório',d:p.conf?dt(p.conf):(p.etapa?p.etapa.charAt(0)+p.etapa.slice(1).toLowerCase():'—'),e:p.atraso>0?p.atraso+' dias além do prazo ('+dt(p.prazo)+')':(p.prazo&&!p.exp?'prazo '+dt(p.prazo):''),c:p.atraso>0?'ruim':(p.exp||p.rec?'ok':'atencao')},
     {n:'Envio',d:dt(p.exp),e:p.rast?'rastreio '+p.rast:(p.diasCaminho?'há '+p.diasCaminho+' dias':''),c:p.exp?(p.diasCaminho>7?'atencao':'ok'):''},
     {n:'Entrega',d:dt(p.rec),e:p.rec?'recebido na unidade':'',c:p.rec?'ok':''}];
   if(canc) et.forEach(function(x){if(!x.c||x.c==='atencao'||x.c==='ruim')x.c='x'});
   var podeReceber=pode&&['E','L','C'].indexOf(p.sit)>=0;
   var livres=p.parc.filter(function(x){return x.livre>0});
-  var temP=p.parc.some(function(x){return x.sit==='P'});
+  var temP=p.parc.some(function(x){return x.sit==='P'||x.sit==='B'});
   var h='<div class="f-cab"><div class="tt"><h2>'+esc(p.num)+'</h2><div class="meta">'+esc(p.un)+' · '+esc(lab.nome)+' · '+esc(lab.numNome)+': '+esc(p.numLab||'—')+'</div><div style="margin-top:6px">'+tag(SIT_P[p.sit]||SIT_P.E)+'</div></div><button type="button" class="fechar" id="fechar" aria-label="Fechar ficha">×</button></div><div class="f-corpo">';
   if(p.acoes.length||podeReceber){
     h+='<div class="sec" style="border-left:4px solid var('+(p.acoes[0]?p.acoes[0].cor:'--amber')+')"><h4>O que fazer agora</h4>'+p.acoes.map(function(a){return '<div style="margin-bottom:4px">→ <b>'+esc(a.txt)+'</b></div>'}).join('');
     h+='<div class="acoes-f">'+(podeReceber?'<button type="button" class="botao mini" id="b-receber">Confirmar recebimento</button>':'')+
       (pode&&livres.length?'<button type="button" class="botao mini sec" data-anexar-ped="1">Anexar comprovante</button>':'')+
-      (temP?'<button type="button" class="botao mini sec" data-cob-ped="'+esc(p.id)+'">Gerar cobrança de baixa</button>':'')+'</div>';
+      (temP?'<button type="button" class="botao mini sec" data-cob-ped="'+esc(p.id)+'">Mensagem ao laboratório</button>':'')+'</div>';
     if(podeReceber) h+='<div id="f-receber-box"></div>';
     h+='</div>';
   }
@@ -415,18 +420,22 @@ function ficha(d){
   if(!p.parc.length) colB+='<div class="fraco">Nenhuma parcela cadastrada.</div>';
   p.parc.forEach(function(x){
     var s=SIT_PC[x.sit]||SIT_PC.A;
-    var bx=[]; bx.push(x.bOmie?'<b>baixa na Omie '+dt(x.bOmie)+'</b>':'sem baixa na Omie'); bx.push(x.bPlan?'planilha '+dt(x.bPlan):'sem baixa na planilha');
     var btn='';
-    if(x.sit==='P') btn='<button type="button" class="botao mini" data-cob-ped="'+esc(p.id)+'">Cobrar baixa</button>';
-    else if(pode&&x.livre>0) btn='<button type="button" class="botao mini sec" data-anexar-parc="'+esc(x.id)+'">'+(x.sit==='B'?'Anexar comprovante':'Pagar esta parcela')+'</button>';
+    if((x.sit==='P'||x.sit==='B')) btn+='<button type="button" class="botao mini sec" data-cob-ped="'+esc(p.id)+'">Mensagem ao laboratório</button>';
+    if(pode&&x.livre>0) btn+='<button type="button" class="botao mini'+(x.sit==='V'||x.sit==='N'?'':' sec')+'" data-anexar-parc="'+esc(x.id)+'">'+(x.sit==='V'||x.sit==='A'?'Pagar esta parcela':'Anexar comprovante')+'</button>';
+    if(pode&&!x.nossa&&x.bOmie&&x.sit!=='X') btn+='<button type="button" class="botao mini sec" data-baixa-parc="'+esc(x.id)+'">Baixar sem comprovante</button>';
+    var tres='<div class="tres">'+
+      '<span><b>Omie</b> '+marca(x.bOmie,x.exOmie)+'</span>'+
+      '<span><b>Planilha</b> '+marca(x.bPlan,x.exPlan)+'</span>'+
+      '<span><b>Nosso sistema</b> '+(x.nossa?'<span class="ok">✓</span> '+(x.pago>=x.valor-0.01?'comprovante':'sem comprovante '+dt(x.bSis)+(x.bSisPor?' por '+esc(x.bSisPor):'')):'<span class="nao">✗</span> falta')+'</span></div>';
     var bol=x.boleto&&porId[x.boleto]?porId[x.boleto]:null;
     colB+='<div class="parc"><div><b>Parcela '+x.n+' de '+x.de+'</b> · vence '+dt(x.venc)+' · '+esc(FORMA[x.forma]||x.forma)+'</div><div class="v">'+R(x.valor)+'</div>'+
-     '<div class="d">'+bx.join(' · ')+(x.cancMot?' · '+esc(x.cancMot):'')+'</div>'+
+     tres+(x.cancMot?'<div class="d">'+esc(x.cancMot)+'</div>':'')+(x.bSisObs?'<div class="d">Obs. da baixa: '+esc(x.bSisObs)+'</div>':'')+
      '<div class="d">Boleto: '+(bol?esc(bol.nome)+' '+lnk(bol,'abrir'):(x.forma==='boleto'?'<span class="fraco">não ligado a esta parcela'+(boletosLivres.length?' (veja os boletos do pedido abaixo)':'')+'</span>':'<span class="fraco">não se aplica</span>'))+'</div>'+
-     '<div class="d">Comprovante: '+((x.pagamentos||[]).length?x.pagamentos.map(function(g){var a=porId[g.arquivo_id];if(a)usados[a.id]=1;return R(g.valor)+' em '+dt(g.pago_em)+' ('+esc(FORMA[g.forma]||g.forma)+') '+(g.abre?'<button type="button" class="link" data-abrir="'+esc(g.arquivo_id)+'">abrir</button>':'<span class="fraco">(no sistema antigo)</span>')}).join(' · '):(x.bOmie?'<span class="fraco">não obrigatório — baixada na Omie</span>':'<span class="fraco">nenhum</span>'))+'</div>'+
+     '<div class="d">Comprovante: '+((x.pagamentos||[]).length?x.pagamentos.map(function(g){var a=porId[g.arquivo_id];if(a)usados[a.id]=1;return R(g.valor)+' em '+dt(g.pago_em)+' ('+esc(FORMA[g.forma]||g.forma)+') '+(g.abre?'<button type="button" class="link" data-abrir="'+esc(g.arquivo_id)+'">abrir</button>':'<span class="fraco">(no sistema antigo)</span>')}).join(' · '):(x.bSis?'<span class="fraco">baixa sem comprovante (Omie conferida)</span>':'<span class="fraco">nenhum</span>'))+'</div>'+
      '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','t-blue']:s)+btn+'</div></div>';
   });
-  if(p.parc.length){var origs={};p.parc.forEach(function(x){origs[x.orig]=1});colB+='<div class="origem">Origem das parcelas: '+esc(Object.keys(origs).join('; '))+'. A situação é calculada pelo sistema: baixa na Omie = paga.</div>'}
+  if(p.parc.length){var origs={};p.parc.forEach(function(x){origs[x.orig]=1});colB+='<div class="origem">Origem das parcelas: '+esc(Object.keys(origs).join('; '))+'. A parcela só finaliza com as 3 baixas: Omie, planilha do laboratório e nosso sistema.</div>'}
   if(boletosLivres.length) colB+='<div class="sub-sec"><b>Boletos do pedido</b> <span class="fraco">(vieram do sistema antigo sem indicação da parcela)</span>'+arqLista(boletosLivres)+'</div>';
   // comprovantes soltos
   var compSoltos=arqPor(['comprovante']).filter(function(a){return !p.parc.some(function(x){return (x.pagamentos||[]).some(function(g){return g.arquivo_id===a.id})})});
@@ -516,6 +525,25 @@ function abrirAnexar(lista,marcadas,contexto){
   atualizaValorAnexo(true);
 }
 var FORMAS_OK=['pix','boleto','cartao','outro'];
+var baixaIds=[];
+function abrirBaixa(lista){
+  baixaIds=lista.map(function(x){return x.id});
+  var hoje=(fichaAtual&&fichaAtual.hoje)||(cache.pag&&cache.pag.hoje)||HOJE;
+  var h='<form id="f-baixa" novalidate><div class="dlg-corpo"><p style="margin:0 0 10px;color:var(--muted);font-size:14px">Use quando a Omie do laboratório já baixou e você não tem o comprovante. Fica registrado quem deu a baixa e quando.</p>'+
+    '<ul class="arqs">'+lista.map(function(x){return '<li><span class="nm">'+esc(x.num)+' · parcela '+x.n+'/'+x.de+' <small class="fraco">'+esc(x.un||'')+' · Omie '+dt(x.bOmie)+'</small></span><span class="ab">'+R(x.valor)+'</span></li>'}).join('')+'</ul>'+
+    '<div class="duas"><label class="campo"><span>Data da baixa</span><input class="ent" type="date" id="b-data" value="'+hoje+'" max="'+hoje+'" required></label></div>'+
+    '<label class="campo"><span>Observação <small>(opcional)</small></span><textarea class="ent" id="b-obs" maxlength="500" placeholder="Ex.: conferido na Omie; comprovante não localizado"></textarea></label>'+
+    '<div id="b-erro"></div></div><div class="dlg-pe"><button type="button" class="botao sec" id="dlg-cancela">Cancelar</button><button type="submit" class="botao">Dar baixa ('+lista.length+')</button></div></form>';
+  abrirDlg('Dar baixa sem comprovante',h);
+}
+async function enviarBaixa(e){
+  e.preventDefault();
+  var d=$('#b-data').value, bt=$('#f-baixa button[type=submit]');
+  if(!d){$('#b-erro').innerHTML='<div class="erro">Informe a data.</div>';return}
+  bt.disabled=true; bt.textContent='Gravando…';
+  try{var r=await api('baixar_sem_comprovante',{parcela_ids:baixaIds,data:d,obs:$('#b-obs').value});fecharDlg();avisar(r.mensagem||'Baixa registrada.');aposGravar()}
+  catch(x){bt.disabled=false;bt.textContent='Dar baixa';$('#b-erro').innerHTML='<div class="erro">'+esc(x.message)+'</div>'}
+}
 function marcadasAnexo(){return anexo.lista.filter(function(x){var c=$('[data-anx="'+x.id+'"]');return c&&c.checked})}
 function atualizaValorAnexo(){var l=marcadasAnexo();var v=$('#a-valor');if(v)v.value=l.length?valBR(r2(l.reduce(function(t,x){return t+x.livre},0))):''}
 function lerArquivo(f){return new Promise(function(ok,nok){var r=new FileReader();r.onload=function(){ok(String(r.result).replace(/^data:[^,]*,/,''))};r.onerror=function(){nok(new Error('Não foi possível ler o arquivo.'))};r.readAsDataURL(f)})}
@@ -614,9 +642,11 @@ document.addEventListener('click',function(e){
   if(b.dataset.cobUn){abrirCobranca({unidade_id:b.dataset.cobUn});return}
   if(b.dataset.anexarParc||b.dataset.anexarPed){
     var p=fichaAtual.pedido, lista=p.parc.filter(function(x){return x.livre>0}).map(function(x){return {id:x.id,num:p.num,un:p.un,unidade_id:p.unidade_id,n:x.n,de:x.de,venc:x.venc,valor:x.valor,livre:x.livre,forma:x.forma}});
-    abrirAnexar(lista,b.dataset.anexarParc?[b.dataset.anexarParc]:lista.filter(function(x){return p.parc.some(function(y){return y.id===x.id&&(y.sit==='V'||y.sit==='B'||y.prox7)})}).map(function(x){return x.id}),'Pedido '+p.num+'.');
+    abrirAnexar(lista,b.dataset.anexarParc?[b.dataset.anexarParc]:lista.filter(function(x){return p.parc.some(function(y){return y.id===x.id&&(y.sit==='V'||y.sit==='N'||y.prox7)})}).map(function(x){return x.id}),'Pedido '+p.num+'.');
     return;
   }
+  if(b.dataset.baixaParc){var pp=fichaAtual.pedido,xx=pp.parc.filter(function(y){return y.id===b.dataset.baixaParc})[0];abrirBaixa([{id:xx.id,num:pp.num,un:pp.un,n:xx.n,de:xx.de,valor:xx.valor,bOmie:xx.bOmie}]);return}
+  if(b.id==='baixa-sel'){abrirBaixa(selecionadas());return}
   if(b.id==='anexar-sel'){var sl=selecionadas();abrirAnexar(sl,sl.map(function(x){return x.id}),'Parcelas marcadas na tela Pagamentos.');return}
   if(b.id==='limpar-sel'){estado.sel={};render();return}
   if(b.dataset.ir){estado.especial='';estado.grupo='';ir(b.dataset.ir);return}
@@ -646,7 +676,7 @@ $('#dlg').addEventListener('click',function(e){if(e.target.id==='dlg')fecharDlg(
 document.addEventListener('submit',function(e){
   var id=e.target.id;
   if(id==='f-login')entrar(e); else if(id==='f-senha')salvarSenha(e); else if(id==='f-mfa')confirmarMfa(e);
-  else if(id==='f-receber')enviarReceber(e); else if(id==='f-anexo')enviarAnexo(e);
+  else if(id==='f-receber')enviarReceber(e); else if(id==='f-baixa')enviarBaixa(e); else if(id==='f-anexo')enviarAnexo(e);
 });
 var tBuscaG;
 document.addEventListener('input',function(e){

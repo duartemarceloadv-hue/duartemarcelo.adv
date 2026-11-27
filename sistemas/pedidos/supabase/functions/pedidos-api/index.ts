@@ -64,7 +64,7 @@ const SIT_P: Record<string, string> = {
   enviado_ao_laboratorio: "E", no_laboratorio: "L", a_caminho: "C", recebido: "R", cancelado: "X", rascunho: "D",
 };
 const SIT_PC: Record<string, string> = {
-  vencida: "V", a_vencer: "A", paga_aguardando_baixa: "P", baixa_so_planilha: "B", quitada: "Q", cancelada: "X",
+  vencida: "V", a_vencer: "A", falta_omie: "P", falta_planilha: "B", falta_baixa_sistema: "N", quitada: "Q", cancelada: "X",
 };
 const FORMAS = ["cartao", "pix", "boleto", "outro"];
 const FORMA_NOME: Record<string, string> = { cartao: "cartão", pix: "PIX", boleto: "boleto", outro: "outra forma" };
@@ -166,7 +166,8 @@ async function carregar(c: Ctx, pedidoId?: string) {
   const parcs = await sql`
     select v.id, v.pedido_id, v.n, v.de, v.vencimento::text venc, v.valor::float8 valor, v.forma,
       v.baixa_planilha_em::text b_plan, v.baixa_omie_em::text b_omie, v.situacao, v.pago_por_nos::float8 pago,
-      pg.pago_em, v.origem, v.cancelada_motivo canc_mot
+      pg.pago_em, v.origem, v.cancelada_motivo canc_mot, v.baixa_sistema_em::text b_sis, v.baixa_sistema_por b_sis_por, v.baixa_sistema_obs b_sis_obs,
+      v.baixa_nossa nossa, v.exige_omie, v.exige_planilha
     from pedidos_novo.v_parcela v
     join pedidos_novo.pedido p on p.id = v.pedido_id
     left join lateral (select min(g.pago_em)::text pago_em from pedidos_novo.pagamento_parcela pp
@@ -192,9 +193,10 @@ async function carregar(c: Ctx, pedidoId?: string) {
     const o: Parc = {
       id: a.id, pedido_id: a.pedido_id, n: a.n, de: a.de, venc: a.venc, valor: a.valor, forma: a.forma, bPlan: a.b_plan, bOmie: a.b_omie,
       sit: SIT_PC[a.situacao] || "A", pago: a.pago, pagoEm: a.pago_em, orig: origemParcela(a.origem), cancMot: a.canc_mot,
+      bSis: a.b_sis, bSisPor: a.b_sis_por, bSisObs: a.b_sis_obs, nossa: a.nossa, exOmie: a.exige_omie, exPlan: a.exige_planilha,
     };
     o.prox7 = o.sit === "A" && o.venc <= h7;
-    o.livre = o.sit === "X" || o.sit === "Q" || p.sit === "X" ? 0 : Math.max(0, r2(o.valor - o.pago));
+    o.livre = o.sit === "X" || o.nossa || p.sit === "X" ? 0 : Math.max(0, r2(o.valor - o.pago));
     p.parc.push(o);
     PARC.push(o);
   }
@@ -223,12 +225,11 @@ function acoesDo(p: Ped) {
   if (p.diasCaminho > 7) a.push({ peso: 50, cor: "--amber", txt: "Confirmar recebimento — a caminho há " + p.diasCaminho + " dias" });
   if (p.labDizEnviou) a.push({ peso: 45, cor: "--amber", txt: "Confirmar recebimento — o laboratório marcou “" + p.etapa.toLowerCase() + "”, mas não temos a data de envio" });
   const pb = cnt("P");
-  if (pb.n) a.push({ peso: 35, cor: "--amber", txt: "Cobrar baixa na Omie — " + plural(pb.n, "parcela paga", "parcelas pagas") + " por nós, ainda sem baixa" });
+  if (pb.n) a.push({ peso: 40, cor: "--amber", txt: "Pedir baixa na Omie ao laboratório — " + plural(pb.n, "parcela", "parcelas") });
+  const nb = cnt("N");
+  if (nb.n) a.push({ peso: 36, cor: "--amber", txt: "Dar baixa no sistema — " + plural(nb.n, "parcela", "parcelas") + " já baixada" + (nb.n > 1 ? "s" : "") + " na Omie e na planilha" });
   const b = cnt("B");
-  if (b.n) {
-    const bol = p.parc.some((x: Parc) => x.sit === "B" && x.forma === "boleto");
-    a.push({ peso: 40, cor: "--amber", txt: (bol ? "Conferir boleto — " : "Conferir pagamento — ") + plural(b.n, "parcela baixada", "parcelas baixadas") + " só na planilha, sem baixa na Omie" });
-  }
+  if (b.n) a.push({ peso: 32, cor: "--amber", txt: "Pedir atualização da planilha ao laboratório — " + plural(b.n, "parcela", "parcelas") + " sem baixa na planilha" });
   if (p.sub === 0) a.push({ peso: 25, cor: "--gray", txt: "Completar itens — pedido sem itens cadastrados" });
   a.sort((x, y) => y.peso - x.peso);
   return a;
@@ -250,7 +251,7 @@ async function aInicio(c: Ctx) {
   return {
     hoje: HOJE, h7,
     cartoes: {
-      B: pc((x) => x.sit === "B"), P: pc((x) => x.sit === "P"), V: pc((x) => x.sit === "V"), A7: pc((x) => x.prox7),
+      B: pc((x) => x.sit === "B"), P: pc((x) => x.sit === "P"), N: pc((x) => x.sit === "N"), V: pc((x) => x.sit === "V"), A7: pc((x) => x.prox7),
       atraso: pd(FILTRO.atraso), caminho: pd(FILTRO.caminho), semitens: pd(FILTRO.semitens), labEnviou: pd(FILTRO.labEnviou),
     },
     onde: {
@@ -269,7 +270,8 @@ const linhaPedido = (p: Ped, nfs: Record<string, string[]>) => {
     sub: p.sub, frete: p.frete, total: p.total, atraso: p.atraso, diasCaminho: p.diasCaminho, acoes: p.acoes,
     parc: {
       n: ativas.length,
-      ok: ativas.filter((x: Parc) => x.sit === "Q" || x.sit === "P").length,
+      ok: ativas.filter((x: Parc) => x.sit === "Q").length,
+      pend: ativas.filter((x: Parc) => x.sit === "P" || x.sit === "B" || x.sit === "N").length,
       venc: ativas.filter((x: Parc) => x.sit === "V").length,
       semComp: ativas.filter((x: Parc) => x.sit === "B").length,
       valor: r2(ativas.reduce((t: number, x: Parc) => t + x.valor, 0)),
@@ -310,6 +312,7 @@ async function aPedidos(c: Ctx, b: any) {
       if (pag === "V" && !s.has("V")) return false;
       if (pag === "B" && !s.has("B")) return false;
       if (pag === "P" && !s.has("P")) return false;
+      if (pag === "N" && !s.has("N")) return false;
       if (pag === "aberto" && !p.parc.some((x: Parc) => x.livre > 0 && x.sit !== "B")) return false;
       if (pag === "sem" && p.parc.length) return false;
     }
@@ -370,7 +373,7 @@ async function aPagamentos(c: Ctx, b: any) {
   PARC.forEach((x) => (uns[porId[x.pedido_id].unidade_id] = porId[x.pedido_id].un));
   const lista = PARC.filter((x) => !un || porId[x.pedido_id].unidade_id === un).map((x) => {
     const p = porId[x.pedido_id];
-    return { id: x.id, pedido_id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id, n: x.n, de: x.de, venc: x.venc, valor: x.valor, forma: x.forma, sit: x.sit, prox7: x.prox7, livre: x.livre, pago: x.pago, pagoEm: x.pagoEm, bPlan: x.bPlan, bOmie: x.bOmie, atrasoDias: x.sit === "V" ? dias(x.venc, HOJE) : 0 };
+    return { id: x.id, pedido_id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id, n: x.n, de: x.de, venc: x.venc, valor: x.valor, forma: x.forma, sit: x.sit, prox7: x.prox7, livre: x.livre, pago: x.pago, pagoEm: x.pagoEm, bPlan: x.bPlan, bOmie: x.bOmie, bSis: x.bSis, nossa: x.nossa, exOmie: x.exOmie, exPlan: x.exPlan, atrasoDias: x.sit === "V" ? dias(x.venc, HOJE) : 0 };
   });
   return {
     hoje: HOJE, h7,
@@ -520,10 +523,10 @@ async function aCobrancaBaixa(c: Ctx, b: any) {
     join pedidos_novo.pedido pe on pe.id = v.pedido_id
     join pedidos_novo.laboratorio la on la.id = pe.laboratorio_id
     join pedidos_novo.unidade u on u.id = pe.unidade_id
-    where v.situacao = 'paga_aguardando_baixa' and ${filtroUn(c, "pe.unidade_id")}
+    where v.situacao in ('falta_omie', 'falta_planilha') and ${filtroUn(c, "pe.unidade_id")}
       and ${pid ? sql`pe.id = ${pid}` : sql`true`} and ${un ? sql`pe.unidade_id = ${un}` : sql`true`}
     order by la.nome, u.nome, pe.num_interno, v.n`;
-  if (!l.length) return { textos: [], mensagem: "Não há parcelas pagas aguardando baixa do laboratório nesta seleção." };
+  if (!l.length) return { textos: [], mensagem: "Não há parcelas aguardando baixa do laboratório (Omie ou planilha) nesta seleção." };
   const fmtCnpj = (s: string | null) => s ? s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : null;
   const porLab: Record<string, any[]> = {};
   l.forEach((x) => (porLab[x.lab] ||= []).push(x));
@@ -531,8 +534,9 @@ async function aCobrancaBaixa(c: Ctx, b: any) {
     const lab = g[0];
     const total = r2(g.reduce((t, x) => t + x.valor, 0));
     const linhas = g.map((x) => {
-      const falta = "Omie" + (!x.baixa_planilha_em ? " (e na planilha)" : "");
-      const pg = (x.pags || []).map((p: any) => `pago em ${dt(p.em)} por ${FORMA_NOME[p.forma] || p.forma} (${R(+p.valor)})`).join("; ");
+      const falta = [!x.baixa_omie_em ? "Omie" : null, !x.baixa_planilha_em ? "planilha" : null].filter(Boolean).join(" e ");
+      const pg = (x.pags || []).map((p: any) => `pago em ${dt(p.em)} por ${FORMA_NOME[p.forma] || p.forma} (${R(+p.valor)})`).join("; ") ||
+        (x.baixa_omie_em ? `baixada na Omie em ${dt(x.baixa_omie_em)}` : x.baixa_planilha_em ? `baixada na planilha em ${dt(x.baixa_planilha_em)}` : "pagamento a confirmar");
       return `• ${lab.num_nome || "Pedido"} ${x.num_lab || "—"} (nosso ${x.num}) — ${x.un}${x.cnpj ? " (CNPJ " + fmtCnpj(x.cnpj) + ")" : ""}\n` +
         `  Parcela ${x.n}/${x.de}, vencimento ${dt(x.venc)}, valor ${R(x.valor)} — ${pg}. Falta a baixa na ${falta}.`;
     });
@@ -540,10 +544,36 @@ async function aCobrancaBaixa(c: Ctx, b: any) {
       `Pedimos, por favor, a baixa ${g.length === 1 ? "do pagamento abaixo, que já foi feito" : "dos pagamentos abaixo, que já foram feitos"} pela Dr. Hair e ainda ${g.length === 1 ? "aparece" : "aparecem"} em aberto do lado de vocês:\n\n` +
       linhas.join("\n\n") +
       `\n\nTotal: ${R(total)} (${plural(g.length, "parcela", "parcelas")}).\n\n` +
-      `Temos os comprovantes; se precisarem, enviamos de novo.\n\nObrigado!\n${c.nome} — Dr. Hair`;
+      `Se precisarem de algum comprovante, é só avisar.\n\nObrigado!\n${c.nome} — Dr. Hair`;
     return { lab: lab.lab_nome, qtd: g.length, total, texto };
   });
   return { textos };
+}
+
+async function aBaixarSemComprovante(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const ids: string[] = Array.isArray(b.parcela_ids) ? [...new Set(b.parcela_ids.map((x: unknown) => uuid(x, "parcela")))] as string[] : [];
+  if (!ids.length) throw new Erro(400, "Escolha ao menos uma parcela.");
+  if (ids.length > 100) throw new Erro(400, "Escolha no máximo 100 parcelas por vez.");
+  const data = dataValida(b.data, "data da baixa");
+  const HOJE = await hojeBanco();
+  if (data > HOJE) throw new Erro(400, "A data da baixa não pode ser no futuro.");
+  const obs = b.obs == null ? null : String(b.obs).trim().slice(0, 500) || null;
+  return await comAuditoria(c, async (tx) => {
+    const l = await tx`select v.id, v.n, v.de, v.baixa_omie_em, v.baixa_nossa, v.cancelada_motivo, pe.num_interno, pe.cancelado_em
+      from pedidos_novo.v_parcela v join pedidos_novo.pedido pe on pe.id = v.pedido_id
+      where v.id = any(${arr(ids)}::uuid[]) and ${filtroUn(c, "pe.unidade_id")}`;
+    if (l.length !== ids.length) throw new Erro(404, "Alguma parcela escolhida não foi encontrada (ou é de unidade fora do seu acesso).", "nao_encontrado");
+    for (const x of l) {
+      const q = `parcela ${x.n}/${x.de} do pedido ${x.num_interno}`;
+      if (x.cancelada_motivo || x.cancelado_em) throw new Erro(409, `A ${q} está cancelada.`);
+      if (x.baixa_nossa) throw new Erro(409, `A ${q} já tem baixa no sistema.`);
+      if (!x.baixa_omie_em) throw new Erro(409, `A ${q} ainda não foi baixada na Omie. Sem baixa na Omie, é preciso anexar o comprovante.`);
+    }
+    await tx`update pedidos_novo.parcela set baixa_sistema_em = ${data}, baixa_sistema_por = ${c.email}, baixa_sistema_obs = ${obs}
+      where id = any(${arr(ids)}::uuid[])`;
+    return { ok: true, mensagem: `Baixa no sistema registrada em ${plural(l.length, "parcela", "parcelas")} (sem comprovante, conferida pela Omie).` };
+  });
 }
 
 async function aAbrirArquivo(c: Ctx, b: any) {
@@ -601,7 +631,7 @@ Deno.serve(async (req) => {
     const acoes: Record<string, (c: Ctx, b: any) => Promise<unknown>> = {
       inicio: aInicio, pedidos: aPedidos, pedido: aPedido, pagamentos: aPagamentos,
       confirmar_recebimento: aConfirmarRecebimento, anexar_comprovante: aAnexarComprovante,
-      cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo,
+      cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo, baixar_sem_comprovante: aBaixarSemComprovante,
     };
     const f = acoes[acao];
     if (!f) throw new Erro(400, "Ação desconhecida.");
