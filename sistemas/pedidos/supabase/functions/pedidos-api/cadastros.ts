@@ -384,7 +384,7 @@ export function acoesCadastros(D: Dep) {
     const q = String(b.busca || "").trim();
     if (q.length < 2) return { pessoas: [] };
     const l = await sql`select p.id, p.nome, (select string_agg(x.conselho || ' ' || x.registro, ', ') from nucleo.profissional x where x.pessoa_id = p.id and x.registro is not null) reg
-      from nucleo.pessoa p where p.juntada_em is null and (nucleo.norm(p.nome) like ${"%" + q.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z0-9]+/g, " ").trim() + "%"}
+      from nucleo.pessoa p where p.juntada_em is null and (nucleo.norm(p.nome) like ${"%" + q.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]+/g, " ").trim() + "%"}
         or exists (select 1 from nucleo.profissional x where x.pessoa_id = p.id and x.registro = ${q.replace(/\D/g, "").replace(/^0+/, "") || "-"}))
       order by p.nome limit 20`;
     return { pessoas: l };

@@ -359,3 +359,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--line);border-bottom:0;backgr
 .pd-lado{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:6px;padding:10px 12px;min-width:0;overflow-wrap:anywhere;background:var(--surface-2)}
 .escolha input[type=radio]{width:18px;height:18px}
 @media (max-width:860px){.pd-par{grid-template-columns:1fr}}
+
+/* ---------- Novo pedido (rascunho) e Notas e PV ---------- */
+#np-dados .duas,#f-np .duas{row-gap:10px}
+.sub-t .nota{font-weight:400}
