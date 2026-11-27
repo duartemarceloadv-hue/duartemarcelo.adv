@@ -24,18 +24,19 @@ function hojeLocal(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneO
 function numBR(s){s=String(s||'').trim().replace(/[R$\s]/g,'');if(!s)return NaN;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return Number(s)}
 function valBR(v){return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 
-var SIT_P={E:['Enviado ao laboratório, aguardando produção','t-blue'],L:['Confirmado pelo laboratório','t-teal'],C:['A caminho da unidade','t-amber'],R:['Recebido na unidade','t-green'],X:['Cancelado','t-gray'],D:['Rascunho','t-gray']};
+// 5 cores de situação (kit): n neutro, i informação, s sucesso, a atenção, d perigo — sempre com texto
+var SIT_P={E:['Enviado ao laboratório, aguardando produção','i'],L:['Confirmado pelo laboratório','i'],C:['A caminho da unidade','a'],R:['Recebido na unidade','s'],X:['Cancelado','n'],D:['Rascunho','n']};
 var SIT_PC={
-  V:['Vencida e sem pagamento','t-red','Pagar — vencidas de verdade','Pagar esta parcela','--red'],
-  A:['A vencer','t-blue','Pagar no vencimento','Pagar esta parcela','--blue'],
-  P:['Falta baixa na Omie','t-amber','Pedir ao laboratório a baixa na Omie','Pedir baixa','--amber'],
-  N:['Falta nossa baixa no sistema','t-amber','Dar baixa no sistema (comprovante ou sem comprovante)','Dar baixa','--amber'],
-  B:['Falta baixa na planilha do laboratório','t-amber','Pedir ao laboratório atualizar a planilha','Pedir atualização','--amber'],
-  Q:['Finalizada — 3 baixas','t-green','Nada a fazer','','--green'],
-  X:['Cancelada','t-gray','Nada a fazer','','--gray']};
+  V:['Vencida e sem pagamento','d','Pagar — vencidas de verdade','Pagar esta parcela','--red'],
+  A:['A vencer','i','Pagar no vencimento','Pagar esta parcela','--blue'],
+  P:['Falta baixa na Omie','a','Pedir ao laboratório a baixa na Omie','Pedir baixa','--amber'],
+  N:['Falta nossa baixa no sistema','a','Dar baixa no sistema (comprovante ou sem comprovante)','Dar baixa','--amber'],
+  B:['Falta baixa na planilha do laboratório','a','Pedir ao laboratório atualizar a planilha','Pedir atualização','--amber'],
+  Q:['Finalizada — 3 baixas','s','Nada a fazer','','--green'],
+  X:['Cancelada','n','Nada a fazer','','--gray']};
 var FORMA={cartao:'Cartão',pix:'PIX',boleto:'Boleto',outro:'Outra forma'};
-function marca(d,exige){if(exige===false)return '<span class="fraco">não se aplica</span>';return d?'<span class="ok">✓</span> '+dt(d):'<span class="nao">✗</span> falta'}
-function tag(t){return '<span class="tag '+t[1]+'">'+esc(t[0])+'</span>'}
+function marca(d,exige){if(exige===false)return '<span class="fraco">não se aplica</span>';return d?'<span class="ok">'+dt(d)+'</span>':'<span class="nao">falta</span>'}
+function tag(t){return '<span class="selo '+t[1]+'">'+esc(t[0])+'</span>'}
 
 /* ---------- API ---------- */
 function ErroApi(status,corpo){this.status=status;this.corpo=corpo||{};this.message=(corpo&&corpo.erro)||('Erro '+status)}
@@ -57,26 +58,56 @@ async function api(acao,dados,url){
   return corpo;
 }
 
+
 /* ---------- estado ---------- */
 var EU=null, HOJE=hojeLocal();
-var estado={tela:'inicio',busca:'',sit:'',lab:'',acao:false,especial:'',lim:60,unid:'',grupo:'',abertos:{},sel:{},pUn:'',pDe:'',pAte:'',pPag:'',pOrdem:'urgencia',gBusca:'',gLab:'',gForma:'',gDe:'',gAte:''};
+var estado={tela:'inicio',busca:'',sit:'',lab:'',acao:false,especial:'',grupo:'',abertos:{},sel:{},pDe:'',pAte:'',pPag:'',pOrdem:'urgencia',gBusca:'',gLab:'',gForma:'',gDe:'',gAte:'',
+  unidade:'',fichaId:'',voltar:'pedidos'};
 var cache={inicio:null,pedidos:null,pag:null};
-var fichaAtual=null;
+var fichaAtual=null, UNIDADES=[];
+// unidade escolhida no cabeçalho: vale em todas as telas e fica guardada neste navegador (o servidor continua decidindo o acesso)
+var CH_UN='dh-pedidos-unidade';
+try{estado.unidade=localStorage.getItem(CH_UN)||''}catch(e){estado.unidade=''}
+function guardaUnidade(){try{if(estado.unidade)localStorage.setItem(CH_UN,estado.unidade);else localStorage.removeItem(CH_UN)}catch(e){}}
+function nomeUnidade(id){var u=UNIDADES.filter(function(x){return x.id===id})[0];return u?u.nome:''}
+
+/* ---------- casca: menu, cabeçalho, barra inferior ---------- */
+function casca(logado){
+  $('#menu').hidden=!logado; $('#barinf').hidden=!logado;
+  if(!logado){$('#unid-box').hidden=true}
+}
+function montaUnidades(){
+  var box=$('#unid-box'), s=$('#unid-sel');
+  if(estado.unidade&&!UNIDADES.some(function(u){return u.id===estado.unidade})){estado.unidade='';guardaUnidade()}
+  if(UNIDADES.length<=1){box.hidden=true;estado.unidade='';return}
+  s.innerHTML=opt('','Todas as unidades',estado.unidade)+UNIDADES.map(function(u){return opt(u.id,u.nome,estado.unidade)}).join('');
+  box.hidden=false; box.classList.toggle('rest',!!estado.unidade);
+}
+function marcaMenu(){
+  var t=estado.tela==='pedido'?estado.voltar:estado.tela;
+  document.querySelectorAll('.sub a[data-ir],.barinf a[data-ir]').forEach(function(a){var on=a.dataset.ir===t;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+  var mi=$('.mi[data-ir]'); if(mi){if(t==='inicio')mi.setAttribute('aria-current','page');else mi.removeAttribute('aria-current')}
+}
+function iniciais(n){var p=String(n||'?').trim().split(/\s+/);return ((p[0]||'?')[0]+(p.length>1?p[p.length-1][0]:'')).toUpperCase()}
 
 /* ---------- acesso: login, troca de senha, autenticador ---------- */
 function telaAcesso(h){
-  $('#abas').hidden=true; fecharFicha(); fecharDlg();
+  casca(false); fecharDlg();
   $('#tela').innerHTML='<section class="acesso">'+h+'</section>';
   var f=$('#tela input'); if(f) f.focus();
 }
+var PAPEL={admin:'Administrador',central:'Central',financeiro:'Financeiro',leitura:'Somente leitura',unidade:'Unidade',socio:'Sócio'};
 function topoUsuario(){
   var u=$('#usuario');
   if(!EU){u.hidden=true;u.innerHTML='';return}
-  u.hidden=false; u.innerHTML='<span class="nm"><b>'+esc(EU.nome)+'</b></span><button type="button" class="sair" id="sair">Sair</button>';
+  u.hidden=false;
+  u.innerHTML='<button type="button" class="usr" id="usr-btn" aria-haspopup="true" aria-expanded="false" aria-label="Menu do usuário: '+esc(EU.nome)+'">'+esc(iniciais(EU.nome))+'</button>'+
+    '<div class="usrpop" id="usr-pop" hidden><div class="nm">'+esc(EU.nome)+'</div><div class="pf">'+esc(PAPEL[EU.papel]||EU.papel||'')+(EU.email?' · '+esc(EU.email):'')+'</div>'+
+    '<button type="button" id="tema2">'+esc($('#tema').textContent)+'</button><button type="button" id="sair">Sair</button></div>';
 }
 function mostrarLogin(msg){
   EU=null; topoUsuario();
-  telaAcesso('<h2>Entrar</h2><p>Use o e-mail e a senha do Sistema de Pedidos.</p>'+(msg?'<div class="alerta">'+esc(msg)+'</div>':'')+
+  telaAcesso('<h1>Entrar</h1><p>Use o e-mail e a senha do Sistema de Pedidos.</p>'+(msg?'<div class="alerta">'+esc(msg)+'</div>':'')+
     '<form id="f-login" novalidate><label class="campo"><span>E-mail</span><input class="ent" id="l-email" type="email" autocomplete="username" required></label>'+
     '<label class="campo"><span>Senha</span><input class="ent" id="l-senha" type="password" autocomplete="current-password" required></label>'+
     '<div id="l-erro"></div><button class="botao grande" type="submit">Entrar</button></form>');
@@ -95,7 +126,7 @@ async function entrar(e){
   await iniciar();
 }
 function mostrarTrocaSenha(){
-  telaAcesso('<h2>Troque a senha temporária</h2><p>Por segurança, crie a sua senha antes de usar o sistema. Use pelo menos 10 caracteres, com letras e números.</p>'+
+  telaAcesso('<h1>Troque a senha temporária</h1><p>Por segurança, crie a sua senha antes de usar o sistema. Use pelo menos 10 caracteres, com letras e números.</p>'+
     '<form id="f-senha" novalidate><label class="campo"><span>Nova senha</span><input class="ent" id="s-nova" type="password" autocomplete="new-password" minlength="10" required></label>'+
     '<label class="campo"><span>Repita a nova senha</span><input class="ent" id="s-rep" type="password" autocomplete="new-password" required></label>'+
     '<div id="s-erro"></div><button class="botao grande" type="submit">Salvar nova senha</button></form>');
@@ -118,7 +149,7 @@ async function mostrarMfa(){
   var ok=(l.data.totp||[]).filter(function(f){return f.status==='verified'});
   if(ok.length){
     mfaFator=ok[0].id;
-    telaAcesso('<h2>Código do autenticador</h2><p>Abra o aplicativo autenticador no celular e digite o código de 6 números de “Pedidos Dr. Hair”.</p>'+formCodigo());
+    telaAcesso('<h1>Código do autenticador</h1><p>Abra o aplicativo autenticador no celular e digite o código de 6 números de “Pedidos Dr. Hair”.</p>'+formCodigo());
     return;
   }
   // remove cadastros começados e não concluídos
@@ -128,10 +159,10 @@ async function mostrarMfa(){
   if(en.error){telaAcesso('<div class="erro">Não foi possível iniciar o cadastro do autenticador ('+esc(en.error.message)+'). Saia e entre de novo.</div><button class="botao grande" type="button" id="sair">Sair</button>');return}
   mfaFator=en.data.id;
   var qr=svgQr(en.data.totp.qr_code||'');
-  telaAcesso('<h2>Cadastre o autenticador</h2><p>Quem cuida do financeiro entra com senha <b>e</b> um código do celular. É feito uma vez só.</p>'+
+  telaAcesso('<h1>Cadastre o autenticador</h1><p>Quem cuida do financeiro entra com senha <b>e</b> um código do celular. É feito uma vez só.</p>'+
     '<ol class="passos"><li>Instale no celular um aplicativo autenticador (Google Authenticator ou Microsoft Authenticator).</li><li>No aplicativo, toque em “adicionar” e leia o código abaixo com a câmera.</li><li>Digite o código de 6 números que aparecer.</li></ol>'+
     '<div class="qr"><img alt="Código QR para cadastrar o autenticador" src="'+esc(qr)+'"></div>'+
-    '<div style="font-size:13px;color:var(--muted);margin-bottom:4px">Sem câmera? Digite esta chave no aplicativo:</div><div class="segredo">'+esc(en.data.totp.secret)+'</div>'+formCodigo());
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Sem câmera? Digite esta chave no aplicativo:</div><div class="segredo">'+esc(en.data.totp.secret)+'</div>'+formCodigo());
 }
 function svgQr(q){
   // o Supabase devolve 'data:image/svg+xml;utf-8,<svg…>' sem codificar; normaliza para uma imagem válida
@@ -170,9 +201,9 @@ async function iniciar(){
   topoUsuario();
   if(EU.trocar_senha){mostrarTrocaSenha();return}
   if(EU.precisa_mfa&&EU.aal!=='aal2'){mostrarMfa();return}
-  $('#abas').hidden=false;
-  var h=(location.hash||'').slice(1); estado.tela=['pedidos','pagamentos'].indexOf(h)>=0?h:'inicio';
-  ir(estado.tela);
+  try{UNIDADES=(await api('unidades')).unidades||[]}catch(x){UNIDADES=[]}
+  casca(true); montaUnidades();
+  rota(true);
 }
 
 /* ---------- Início ---------- */
@@ -193,48 +224,51 @@ function defCartoes(d){
     {acao:'Confirmar recebimento',det:'O laboratório marcou como enviado, mas não temos data de envio nem de entrega.',c:'--amber',r:c.labEnviou,ir:['pedidos','labEnviou']}]}];
 }
 var FILTRO_NOME={atraso:'Passou do prazo de 30 dias',caminho:'A caminho há mais de 7 dias',semitens:'Pedidos sem itens',labEnviou:'Confirmar recebimento'};
+function titulo(t,ac,linha){return '<div class="tit"><h1>'+esc(t)+'</h1>'+(ac?'<div class="ac">'+ac+'</div>':'')+'</div>'+(linha?'<p class="atual">'+linha+'</p>':'')}
+function escopoTxt(){return estado.unidade?esc(nomeUnidade(estado.unidade)):(UNIDADES.length>1?'todas as unidades':'')}
 function telaInicio(d){
-  var h='<h2>O que fazer</h2><p class="sub">Cada cartão mostra quantos itens pedem ação e quanto dinheiro envolve. Clique para ver a lista.</p>';
+  var h=titulo('Laboratórios — o que fazer','','Cada cartão mostra quantos itens pedem ação e quanto dinheiro envolve'+(escopoTxt()?' ('+escopoTxt()+')':'')+'. Clique para ver a lista.');
+  if(!d) return h+'<p class="vazio">Carregando os números…</p>';
   defCartoes(d).forEach(function(g){
-    h+='<section class="grupo"><h3>'+g.g+'</h3><div class="cartoes">';
+    h+='<section class="grupo"><h2>'+g.g+'</h2><div class="cards">';
     g.itens.forEach(function(c){
       var val=c.semValor?'total ainda não calculado':R(c.r.v);
-      h+='<button type="button" class="cartao'+(c.r.n?'':' zero')+'" style="--c:var('+c.c+')" data-card="'+c.ir[0]+':'+c.ir[1]+'">'+
-         '<div class="acao">'+esc(c.acao)+'</div><div class="nums"><span class="qtd">'+c.r.n+'</span><span class="val">'+val+'</span></div>'+
-         '<div class="det">'+esc(c.det)+'</div></button>';
+      h+='<button type="button" class="card'+(c.r.n?'':' zero')+'" style="--c:var('+c.c+')" data-card="'+c.ir[0]+':'+c.ir[1]+'">'+
+         '<span class="ac">'+esc(c.acao)+'</span><span class="nums"><span class="v">'+c.r.n+'</span><span class="val">'+val+'</span></span>'+
+         '<span class="det">'+esc(c.det)+'</span></button>';
     });
     h+='</div></section>';
   });
-  var o=d.onde, ordem=['E','L','C'], max=Math.max(1,o.E,o.L,o.C), cor={E:'--blue',L:'--teal',C:'--amber'};
-  h+='<section class="grupo"><h3>Onde estão os pedidos em aberto</h3><div class="painel"><div class="barras">';
+  var o=d.onde, ordem=['E','L','C'], max=Math.max(1,o.E,o.L,o.C), cor={E:'--blue',L:'--blue',C:'--amber'};
+  h+='<section class="grupo"><h2>Onde estão os pedidos em aberto</h2><div class="painel"><div class="barras">';
   ordem.forEach(function(s){
-    h+='<button type="button" class="barra" data-sit="'+s+'" style="--c:var('+cor[s]+')"><span>'+esc(SIT_P[s][0])+'</span><span class="trilho"><span class="ench" style="display:block;width:'+(o[s]/max*100)+'%"></span></span><span class="n">'+o[s]+'</span></button>';
+    h+='<button type="button" class="barra" data-sit="'+s+'" style="--c:var('+cor[s]+')"><span>'+esc(SIT_P[s][0])+'</span><span class="trilho"><span class="ench" style="width:'+(o[s]/max*100)+'%"></span></span><span class="n">'+o[s]+'</span></button>';
   });
   h+='</div><p class="nota-rodape">'+o.abertos+' pedidos em aberto, dos quais '+o.atrasados+' já passaram do prazo do laboratório. Recebidos: '+o.recebidos+' · Cancelados: '+o.cancelados+'.</p></div></section>';
   return h;
 }
 
 /* ---------- Pedidos ---------- */
-function chip(grupo,val,txt,ativo){return '<button type="button" class="chip" data-f="'+grupo+'" data-v="'+val+'" aria-pressed="'+ativo+'">'+esc(txt)+'</button>'}
-function filtrosPedidos(){return {busca:estado.busca,sit:estado.sit,lab:estado.lab,so_acao:estado.acao,especial:estado.especial,unidade_id:estado.pUn,de:estado.pDe,ate:estado.pAte,pag:estado.pPag,ordem:estado.pOrdem}}
+function filtrosPedidos(){return {busca:estado.busca,sit:estado.sit,lab:estado.lab,so_acao:estado.acao,especial:estado.especial,unidade_id:estado.unidade,de:estado.pDe,ate:estado.pAte,pag:estado.pPag,ordem:estado.pOrdem}}
 function opt(v,t,cur){return '<option value="'+esc(v)+'"'+(String(v)===String(cur||'')?' selected':'')+'>'+esc(t)+'</option>'}
-function campo(rot,html){return '<label class="campo"><span>'+esc(rot)+'</span>'+html+'</label>'}
-function filtrosAtivos(){return !!(estado.sit||estado.lab||estado.acao||estado.pUn||estado.pDe||estado.pAte||estado.pPag||estado.busca||estado.especial)}
+function campo(rot,html,cls){return '<label class="campo'+(cls?' '+cls:'')+'"><span>'+esc(rot)+'</span>'+html+'</label>'}
+function filtrosAtivos(){return !!(estado.sit||estado.lab||estado.acao||estado.pDe||estado.pAte||estado.pPag||estado.busca||estado.especial)}
 function resumoParc(x){
   if(!x.n) return '<span class="fraco">sem parcelas</span>';
   var h='<span class="num">'+x.ok+'/'+x.n+' finalizadas</span>';
-  if(x.venc) h+=' <span class="tag t-red mini">'+x.venc+' vencida'+(x.venc>1?'s':'')+'</span>';
-  if(x.pend) h+=' <span class="tag t-amber mini">'+x.pend+' pend. de baixa</span>';
+  if(x.venc) h+=' <span class="selo d">'+x.venc+' vencida'+(x.venc>1?'s':'')+'</span>';
+  if(x.pend) h+=' <span class="selo a">'+x.pend+' pend. de baixa</span>';
   if(x.falta>0) h+='<span class="sub2">falta '+R(x.falta)+(x.prox?' · vence '+dt(x.prox).slice(0,5):'')+'</span>';
   return h;
 }
+var SIT_CURTA={E:'No laboratório',L:'Confirmado pelo lab.',C:'A caminho',R:'Recebido',X:'Cancelado',D:'Rascunho'};
 function telaPedidos(d){
-  var uns=(d&&d.unidades)||estado.pUnLista||[]; if(d&&d.unidades) estado.pUnLista=d.unidades;
-  var h='<div class="tit-linha"><h2>Pedidos</h2>'+(d?'<span class="contagem">'+plural(d.qtd,'pedido','pedidos')+' · total '+R(d.total)+'</span>':'')+'</div>';
-  if(estado.especial) h+='<div class="chips" style="margin-bottom:8px"><span class="rot">Vindo do Início</span><button type="button" class="chip fixo" data-f="esp" data-v="">'+esc(FILTRO_NOME[estado.especial])+' ✕</button></div>';
+  var comUn=!estado.unidade;
+  var h=titulo('Pedidos','<button type="button" class="btn" id="novo" aria-disabled="true" title="Ainda não faz parte desta versão">Novo pedido <span class="selo n">em breve</span></button>',
+    d?plural(d.qtd,'pedido','pedidos')+' · total '+R(d.total)+(escopoTxt()?' · '+escopoTxt():''):'');
+  if(estado.especial) h+='<div class="filtros"><span class="fraco">Vindo do Início:</span><button type="button" class="botao sec mini" data-f="esp" data-v="">'+esc(FILTRO_NOME[estado.especial])+' — tirar filtro</button></div>';
   h+='<div class="filtros">'+
-   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">')+
-   campo('Unidade','<select class="sel" data-pf="pUn">'+opt('','Todas',estado.pUn)+uns.map(function(u){return opt(u.id,u.nome,estado.pUn)}).join('')+'</select>')+
+   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">','busca')+
    campo('Laboratório','<select class="sel" data-pf="lab">'+opt('','Todos',estado.lab)+opt('CP','Centro Paulista',estado.lab)+opt('INJ','Injemed',estado.lab)+'</select>')+
    campo('Situação','<select class="sel" data-pf="sit">'+opt('','Todas',estado.sit)+opt('E','No laboratório',estado.sit)+opt('L','Confirmado pelo lab.',estado.sit)+opt('C','A caminho',estado.sit)+opt('R','Recebidos',estado.sit)+opt('X','Cancelados',estado.sit)+'</select>')+
    campo('Pagamento','<select class="sel" data-pf="pPag">'+opt('','Todos',estado.pPag)+opt('V','Com parcela vencida',estado.pPag)+opt('aberto','Com parcela a pagar',estado.pPag)+opt('P','Falta baixa na Omie',estado.pPag)+opt('B','Falta baixa na planilha',estado.pPag)+opt('N','Falta nossa baixa',estado.pPag)+opt('sem','Sem parcelas',estado.pPag)+'</select>')+
@@ -245,22 +279,20 @@ function telaPedidos(d){
    (filtrosAtivos()?'<button type="button" class="botao sec mini" id="limpar-filtros">Limpar filtros</button>':'')+
    '</div>';
   if(!d) return h+'<div class="tabela"><div class="vazio">Carregando os pedidos…</div></div>';
-  h+='<div class="tabela"><table class="tp"><thead><tr><th>Nº DH / lab.</th><th>Unidade</th><th>Lab.</th><th>Enviado</th><th>Prazo</th><th>Situação</th><th class="r">Total</th><th>Parcelas</th><th>NF</th><th>Próxima ação</th></tr></thead><tbody>';
-  if(!d.itens.length) h+='<tr><td colspan="10" class="vazio">Nenhum pedido com esses filtros.</td></tr>';
+  h+='<div class="tabela cartoes"><table><thead><tr><th>Nº DH</th>'+(comUn?'<th>Unidade</th>':'')+'<th>Enviado</th><th>Prazo</th><th>Situação</th><th class="r">Total</th><th>Parcelas</th><th>Próxima ação</th></tr></thead><tbody>';
+  if(!d.itens.length) h+='<tr><td colspan="8" class="vazio">Nenhum pedido com esses filtros.</td></tr>';
   d.itens.forEach(function(p){
     var a=p.acoes[0], canc=p.sit==='X';
     var prazo=p.rec?'<span class="fraco">recebido '+dt(p.rec)+'</span>':(p.atraso>0?'<b class="vermelho">'+dt(p.prazo)+'</b><span class="sub2 vermelho">+'+p.atraso+' dias</span>':(p.exp?'<span class="fraco">saiu '+dt(p.exp)+'</span>'+(p.diasCaminho?'<span class="sub2">há '+p.diasCaminho+' dias</span>':''):dt(p.prazo)));
     h+='<tr class="lp'+(canc?' canc':'')+'" data-p="'+esc(p.id)+'" tabindex="0">'+
-     '<td><b class="dh">'+esc(p.num)+'</b><span class="sub2">'+esc(p.numLab||'—')+'</span></td>'+
-     '<td class="c-un">'+esc(p.un)+'</td>'+
-     '<td class="nw">'+esc(p.lab==='CP'?'C. Paulista':p.labNome)+'</td>'+
-     '<td class="num">'+dt(p.env)+'</td>'+
-     '<td class="num">'+(canc?'—':prazo)+'</td>'+
-     '<td class="nw">'+tag([SIT_CURTA[p.sit]||'—',(SIT_P[p.sit]||SIT_P.E)[1]])+(p.etapa&&!p.rec&&!canc?'<span class="sub2">lab.: '+esc(p.etapa.toLowerCase())+'</span>':'')+'</td>'+
-     '<td class="r num">'+(p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total))+'</td>'+
-     '<td class="nw">'+(canc?'—':resumoParc(p.parc))+'</td>'+
-     '<td class="num">'+(p.nf.length?esc(p.nf.slice(0,2).join(', '))+(p.nf.length>2?' +'+(p.nf.length-2):''):'<span class="fraco">—</span>')+'</td>'+
-     '<td class="acao">'+(a?'<b style="--c:var('+a.cor+')">'+esc(a.txt)+'</b>'+(p.acoes.length>1?' <span class="fraco">+'+(p.acoes.length-1)+'</span>':''):'<span class="fraco">nada a fazer</span>')+'</td>'+
+     '<td class="c1"><b class="dh">'+esc(p.num)+'</b><span class="sub2">'+esc(p.lab==='CP'?'C. Paulista':p.labNome)+' '+esc(p.numLab||'—')+(p.nf.length?' · NF '+esc(p.nf.slice(0,2).join(', '))+(p.nf.length>2?' +'+(p.nf.length-2):''):'')+'</span></td>'+
+     (comUn?'<td class="cl">'+esc(p.un)+'</td>':'')+
+     '<td class="cl num"><span class="rot-m">Enviado </span>'+dt(p.env)+'</td>'+
+     '<td class="cl num"><span class="rot-m">Prazo </span>'+(canc?'—':prazo)+'</td>'+
+     '<td class="cl">'+tag([SIT_CURTA[p.sit]||'—',(SIT_P[p.sit]||SIT_P.E)[1]])+(p.etapa&&!p.rec&&!canc?'<span class="sub2">lab.: '+esc(p.etapa.toLowerCase())+'</span>':'')+'</td>'+
+     '<td class="c2 r num">'+(p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total))+'</td>'+
+     '<td class="cl">'+(canc?'—':resumoParc(p.parc))+'</td>'+
+     '<td class="cl acao">'+(a?'<b style="--c:var('+a.cor+')">'+esc(a.txt)+'</b>'+(p.acoes.length>1?' <span class="fraco">+'+(p.acoes.length-1)+'</span>':''):'<span class="fraco">nada a fazer</span>')+'</td>'+
      '</tr>';
   });
   h+='</tbody></table></div>';
@@ -268,7 +300,6 @@ function telaPedidos(d){
   if(resta>0) h+='<button type="button" class="mais" id="maisPed">Mostrar mais '+Math.min(100,resta)+' de '+resta+' restantes</button>';
   return h;
 }
-var SIT_CURTA={E:'No laboratório',L:'Confirmado pelo lab.',C:'A caminho',R:'Recebido',X:'Cancelado',D:'Rascunho'};
 var seqPed=0;
 async function carregarPedidos(anexar){
   var meu=++seqPed, f=filtrosPedidos();
@@ -294,11 +325,12 @@ var GRUPOS=[
   {id:'X',f:function(x){return x.sit==='X'}}];
 var GRUPO_TXT={V:'Venceram sem nenhuma das 3 baixas: Omie, planilha do laboratório e nosso sistema.',P:'A Omie do laboratório ainda não baixou. Sem a Omie o pagamento não finaliza.',N:'Omie e planilha já baixaram. Falta a nossa baixa: anexe o comprovante ou dê baixa sem comprovante (vale porque a Omie já baixou).',B:'A Omie já baixou, mas a planilha do laboratório não. Pendência de informação: pedir ao laboratório atualizar.',A:'Vencimento mais distante.',Q:'Finalizadas: Omie, planilha e nosso sistema baixados.',X:'Canceladas, não precisam ser pagas.'};
 function selecionadas(){var d=cache.pag;if(!d)return [];return d.parcelas.filter(function(x){return estado.sel[x.id]})}
+function nossaTxt(x){return x.nossa?'<span class="ok">'+(x.pago>=x.valor-0.01?'comprovante'+(x.pagoEm?' '+dt(x.pagoEm):''):'sem comprovante '+dt(x.bSis))+'</span>':(x.pago?'<span class="fraco">parcial '+R(x.pago)+'</span>':'<span class="nao">falta</span>')}
 function telaPagamentos(d){
-  if(!d) return '<h2>Pagamentos</h2><p class="sub">Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.</p><p class="vazio">Carregando as parcelas…</p>';
-  var bq=(estado.gBusca||'').trim().toLowerCase();
+  if(!d) return titulo('Pagamentos','','Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.')+'<p class="vazio">Carregando as parcelas…</p>';
+  var bq=(estado.gBusca||'').trim().toLowerCase(), comUn=!estado.unidade;
   var base=d.parcelas.filter(function(x){
-    if(estado.unid&&x.unidade_id!==estado.unid) return false;
+    if(estado.unidade&&x.unidade_id!==estado.unidade) return false;
     if(estado.gLab&&x.lab!==estado.gLab) return false;
     if(estado.gForma&&x.forma!==estado.gForma) return false;
     if(estado.gDe&&x.venc<estado.gDe) return false;
@@ -306,15 +338,14 @@ function telaPagamentos(d){
     if(bq&&(x.num+' '+(x.numLab||'')+' '+x.un).toLowerCase().indexOf(bq)<0) return false;
     return true});
   var pode=d.pode_gravar;
-  var h='<h2>Pagamentos</h2><p class="sub">Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito.'+(pode?' Marque as parcelas pagas com o mesmo comprovante e clique em “Anexar comprovante”.':'')+'</p>'+
+  var h=titulo('Pagamentos','','Parcelas cobradas pelos laboratórios, agrupadas pelo que precisa ser feito'+(escopoTxt()?' ('+escopoTxt()+')':'')+'.'+(pode?' Marque as parcelas pagas com o mesmo comprovante e clique em “Anexar comprovante”.':''))+
    '<div class="filtros">'+
-   campo('Buscar','<input class="busca" id="g-busca" type="search" placeholder="Nº DH, nº do laboratório ou unidade" value="'+esc(estado.gBusca)+'">')+
-   campo('Unidade','<select class="sel" id="unid">'+opt('','Todas',estado.unid)+d.unidades.map(function(u){return opt(u.id,u.nome,estado.unid)}).join('')+'</select>')+
+   campo('Buscar','<input class="busca" id="g-busca" type="search" placeholder="Nº DH, nº do laboratório ou unidade" value="'+esc(estado.gBusca)+'">','busca')+
    campo('Laboratório','<select class="sel" data-gf="gLab">'+opt('','Todos',estado.gLab)+opt('CP','Centro Paulista',estado.gLab)+opt('INJ','Injemed',estado.gLab)+'</select>')+
    campo('Forma','<select class="sel" data-gf="gForma">'+opt('','Todas',estado.gForma)+opt('boleto','Boleto',estado.gForma)+opt('pix','PIX',estado.gForma)+opt('cartao','Cartão',estado.gForma)+opt('outro','Outra',estado.gForma)+'</select>')+
    campo('Vence de','<input class="sel" type="date" data-gf="gDe" value="'+esc(estado.gDe)+'">')+
    campo('até','<input class="sel" type="date" data-gf="gAte" value="'+esc(estado.gAte)+'">')+
-   ((estado.unid||estado.gLab||estado.gForma||estado.gDe||estado.gAte||estado.gBusca)?'<button type="button" class="botao sec mini" id="limpar-g">Limpar filtros</button>':'')+
+   ((estado.gLab||estado.gForma||estado.gDe||estado.gAte||estado.gBusca)?'<button type="button" class="botao sec mini" id="limpar-g">Limpar filtros</button>':'')+
    '<span class="contagem">'+plural(base.length,'parcela','parcelas')+' · '+R(base.reduce(function(t,x){return t+x.valor},0))+'</span></div>';
   GRUPOS.forEach(function(g){
     var s=SIT_PC[g.id]||SIT_PC.A;
@@ -323,26 +354,26 @@ function telaPagamentos(d){
     var aberto=estado.abertos[g.id]!==undefined?estado.abertos[g.id]:(estado.grupo?estado.grupo===g.id:(g.id==='V'||g.id==='A7'));
     var lim=estado.abertos['lim'+g.id]||25;
     var txt=g.id==='A7'?'Ainda não venceram, mas vencem até '+dt(d.h7)+'.':GRUPO_TXT[g.id];
-    h+='<section class="gp" id="g-'+g.id+'" style="--c:var('+cor+')'+(l.length?'':';opacity:.55')+'">'+
-     '<button type="button" class="gp-cab" data-g="'+g.id+'" aria-expanded="'+aberto+'"><span class="t"><b>'+esc(nome)+'</b><span>'+esc(txt)+'</span><br><span style="color:var(--text);font-weight:600">→ '+esc(acao)+'</span></span>'+
+    h+='<section class="gp'+(l.length?'':' vazio-g')+'" id="g-'+g.id+'" style="--c:var('+cor+')">'+
+     '<button type="button" class="gp-cab" data-g="'+g.id+'" aria-expanded="'+aberto+'"><span class="t"><b class="gn">'+esc(nome)+'</b><span>'+esc(txt)+'</span><span class="faz">'+esc(acao)+'</span></span>'+
      '<span class="tot"><b>'+R(l.reduce(function(t,x){return t+x.valor},0))+'</b><span>'+plural(l.length,'parcela','parcelas')+' · '+(aberto?'ocultar':'ver lista')+'</span></span></button>';
     if(aberto&&l.length){
       h+='<div class="gp-corpo">';
-      if(g.cob) h+='<div class="gp-acoes">'+(estado.unid?'<button type="button" class="botao mini" data-cob-un="'+esc(estado.unid)+'">Gerar mensagem ao laboratório desta unidade</button><span>Pede a baixa na Omie e/ou na planilha, com datas e valores. Nada é enviado.</span>':'<span>Para gerar a mensagem ao laboratório, escolha a unidade acima (ou abra um pedido).</span>')+'</div>';
+      if(g.cob) h+='<div class="gp-acoes">'+(estado.unidade?'<button type="button" class="botao mini" data-cob-un="'+esc(estado.unidade)+'">Gerar mensagem ao laboratório desta unidade</button><span>Pede a baixa na Omie e/ou na planilha, com datas e valores. Nada é enviado.</span>':'<span>Para gerar a mensagem ao laboratório, escolha a unidade no alto da tela (ou abra um pedido).</span>')+'</div>';
       if(g.sel&&pode) h+='<div class="gp-acoes"><span>Marque as parcelas pagas com um mesmo comprovante (todas da mesma unidade).</span></div>';
-      h+='<div class="tabela sem-borda"><table class="tp"><thead><tr><th class="sel-c"></th><th>Nº DH / lab.</th><th>Unidade</th><th>Lab.</th><th>Parcela</th><th>Vencimento</th><th class="r">Valor</th><th>Baixa Omie</th><th>Baixa planilha</th><th>Nosso sistema</th><th>Forma</th></tr></thead><tbody>';
+      h+='<div class="tabela sem-borda cartoes com-sel"><table><thead><tr><th class="sel-c"></th><th>Nº DH / parcela</th>'+(comUn?'<th>Unidade</th>':'')+'<th>Vencimento</th><th class="r">Valor</th><th>Baixas: Omie · planilha · sistema</th><th>Forma</th></tr></thead><tbody>';
       l.slice(0,lim).forEach(function(x){
         var marcavel=g.sel&&pode&&x.livre>0;
         h+='<tr class="lp" data-p="'+esc(x.pedido_id)+'" tabindex="0"><td class="sel-c">'+(marcavel?'<input type="checkbox" data-selp="'+esc(x.id)+'" aria-label="Marcar parcela '+x.n+'/'+x.de+' do pedido '+esc(x.num)+'"'+(estado.sel[x.id]?' checked':'')+'>':'')+'</td>'+
-         '<td><b class="dh">'+esc(x.num)+'</b><span class="sub2">'+esc(x.numLab||'—')+'</span></td><td class="c-un">'+esc(x.un)+'</td><td>'+esc(x.lab==='CP'?'C. Paulista':x.labNome)+'</td>'+
-         '<td class="num">'+x.n+'/'+x.de+'</td><td class="num">'+dt(x.venc)+(x.atrasoDias>0?'<span class="sub2 vermelho">há '+x.atrasoDias+' dias</span>':'')+'</td>'+
-         '<td class="r num"><b>'+R(x.valor)+'</b></td>'+
-         '<td class="num">'+marca(x.bOmie,x.exOmie)+'</td><td class="num">'+marca(x.bPlan,x.exPlan)+'</td>'+
-         '<td class="num">'+(x.nossa?'<span class="ok">✓</span> '+(x.pago>=x.valor-0.01?'comprovante'+(x.pagoEm?' '+dt(x.pagoEm):''):'sem compr. '+dt(x.bSis)):(x.pago?'<span class="fraco">parcial '+R(x.pago)+'</span>':'<span class="nao">✗</span>'))+'</td>'+
-         '<td class="nw">'+esc(FORMA[x.forma]||x.forma)+'</td></tr>';
+         '<td class="c1"><b class="dh">'+esc(x.num)+'</b><span class="sub2">parcela '+x.n+'/'+x.de+' · '+esc(x.lab==='CP'?'C. Paulista':x.labNome)+' '+esc(x.numLab||'—')+'</span></td>'+
+         (comUn?'<td class="cl">'+esc(x.un)+'</td>':'')+
+         '<td class="cl num"><span class="rot-m">Vence </span>'+dt(x.venc)+(x.atrasoDias>0?'<span class="sub2 vermelho">há '+x.atrasoDias+' dias</span>':'')+'</td>'+
+         '<td class="c2 r num"><b>'+R(x.valor)+'</b></td>'+
+         '<td class="cl"><span class="baixas"><span>Omie: '+marca(x.bOmie,x.exOmie)+'</span><span>Planilha: '+marca(x.bPlan,x.exPlan)+'</span><span>Sistema: '+nossaTxt(x)+'</span></span></td>'+
+         '<td class="cl"><span class="rot-m">Forma </span>'+esc(FORMA[x.forma]||x.forma)+'</td></tr>';
       });
       h+='</tbody></table></div>';
-      if(l.length>lim) h+='<div style="padding:10px 16px"><button type="button" class="botao sec mini" data-mais="'+g.id+'">Mostrar mais ('+(l.length-lim)+' restantes)</button></div>';
+      if(l.length>lim) h+='<div class="gp-acoes"><button type="button" class="botao sec mini" data-mais="'+g.id+'">Mostrar mais ('+(l.length-lim)+' restantes)</button></div>';
       h+='</div>';
     }
     h+='</section>';
@@ -350,7 +381,7 @@ function telaPagamentos(d){
   var sl=selecionadas();
   if(sl.length){
     var uns=new Set(sl.map(function(x){return x.unidade_id}));
-    h+='<div class="barra-sel" id="barra-sel"><span>'+plural(sl.length,'parcela marcada','parcelas marcadas')+' · falta pagar '+R(sl.reduce(function(t,x){return t+x.livre},0))+(uns.size>1?' · <b>atenção: unidades diferentes</b>':'')+'</span>'+
+    h+='<div class="lote" id="barra-sel"><span>'+plural(sl.length,'parcela marcada','parcelas marcadas')+' · falta pagar '+R(sl.reduce(function(t,x){return t+x.livre},0))+(uns.size>1?' · <b>atenção: unidades diferentes</b>':'')+'</span>'+
       '<button type="button" class="botao sec mini" id="limpar-sel">Desmarcar</button>'+(sl.every(function(x){return x.bOmie})?'<button type="button" class="botao sec mini" id="baixa-sel">Dar baixa sem comprovante</button>':'')+'<button type="button" class="botao mini" id="anexar-sel"'+(uns.size>1?' disabled':'')+'>Anexar comprovante</button></div>';
   }
   return h;
@@ -360,146 +391,195 @@ async function carregarPagamentos(){
   catch(x){if(estado.tela==='pagamentos'&&x.status!==401&&x.status!==403)$('#tela').innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}
 }
 
-/* ---------- ficha do pedido ---------- */
-function ficha(d){
-  var p=d.pedido, lab=d.lab, pode=d.pode_gravar;
-  var pagas=p.parc.filter(function(x){return x.sit==='Q'}).length, ativas=p.parc.filter(function(x){return x.sit!=='X'});
-  var pagoEm=p.parc.map(function(x){return x.pagoEm}).filter(Boolean).sort()[0];
-  var vencidas=p.parc.some(function(x){return x.sit==='V'});
-  var canc=p.sit==='X';
-  var et=[
-    {n:'Pedido',d:dt(p.env),e:'enviado ao laboratório',c:p.env?'ok':''},
-    {n:'Pagamento',d:ativas.length?(pagas+' de '+ativas.length+' finalizadas'):'sem parcelas',e:ativas.some(function(x){return x.sit==='P'||x.sit==='B'||x.sit==='N'})?'há baixas pendentes':(pagoEm?'1º pagamento '+dt(pagoEm):''),c:vencidas?'ruim':(ativas.length&&pagas===ativas.length?'ok':(ativas.length?'atencao':''))},
-    {n:'Laboratório',d:p.conf?dt(p.conf):(p.etapa?p.etapa.charAt(0)+p.etapa.slice(1).toLowerCase():'—'),e:p.atraso>0?p.atraso+' dias além do prazo ('+dt(p.prazo)+')':(p.prazo&&!p.exp?'prazo '+dt(p.prazo):''),c:p.atraso>0?'ruim':(p.exp||p.rec?'ok':'atencao')},
-    {n:'Envio',d:dt(p.exp),e:p.rast?'rastreio '+p.rast:(p.diasCaminho?'há '+p.diasCaminho+' dias':''),c:p.exp?(p.diasCaminho>7?'atencao':'ok'):''},
-    {n:'Entrega',d:dt(p.rec),e:p.rec?'recebido na unidade':'',c:p.rec?'ok':''}];
-  if(canc) et.forEach(function(x){if(!x.c||x.c==='atencao'||x.c==='ruim')x.c='x'});
+/* ---------- ficha do pedido (página própria) ----------
+   Regra "uma informação, um lugar só":
+   cabeçalho = número, unidade, laboratório, situação e valor total; Entrega = envio, previsão, saída, rastreio e recebimento;
+   Pagamento = parcelas com boleto e comprovante; Notas fiscais = DANFE, XML, Portal Omie e conferência;
+   Outros anexos = o que não apareceu antes; Do sistema antigo = só o que não existe no sistema novo; Histórico por último. */
+var API_HIST=SUPA_URL+'/functions/v1/pedidos-historico';
+function dtHora(s){if(!s)return '—';var d=new Date(String(s).replace(' ','T'));return isNaN(d)?esc(s):d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+function secao(id,tit,q,ac,corpo){return '<section class="sec" id="'+id+'"><div class="sh"><h2>'+esc(tit)+'</h2>'+(q?'<span class="q">'+q+'</span>':'')+(ac||'')+'</div>'+corpo+'</section>'}
+function kvi(k,v,cls){return '<div><dt>'+esc(k)+'</dt><dd'+(cls?' class="'+cls+'"':'')+'>'+v+'</dd></div>'}
+var ALVO_ACAO=[[/^(Pagar|Pedir baixa|Dar baixa|Pedir atualiza|Cobrar baixa|Anexar)/,'sec-pag'],[/^(Cobrar laborat|Confirmar receb)/,'sec-entrega'],[/^Completar itens/,'sec-itens']];
+function ficha(d,hist){
+  var p=d.pedido, lab=d.lab, pode=d.pode_gravar, canc=p.sit==='X', ed=pode&&!canc;
+  var H=hist||{}, ant=(H.tem&&H.campos)||{};
+  var porId={}; p.arq.forEach(function(a){porId[a.id]=a});
+  var usados={}, datas={};
+  var ver=function(s){if(s)datas[String(s).slice(0,10)]=1;return dt(s)};
+  var abre=function(a,rot){usados[a.id]=1;return a.abre?'<button type="button" class="link" data-abrir="'+esc(a.id)+'">'+esc(rot||'abrir')+'</button>':'<span class="fraco">(no sistema antigo)</span>'};
+  var arqLi=function(a){usados[a.id]=1;return '<li><span class="nm">'+esc(a.nome)+(a.subst?' <span class="selo n">substituído</span>':'')+'</span><span class="mt">'+esc(a.cat)+'</span>'+abre(a)+'</li>'};
+  var arqPor=function(cods){return p.arq.filter(function(a){return cods.indexOf(a.cod)>=0&&!usados[a.id]})};
+
+  // ----- cabeçalho
+  var h='<nav class="migalha" aria-label="Caminho"><button type="button" data-ir="'+esc(estado.voltar)+'">'+esc(estado.voltar==='pagamentos'?'Pagamentos':(estado.voltar==='inicio'?'Início':'Pedidos'))+'</button><span aria-hidden="true">›</span><span>Ficha do pedido</span></nav>';
+  var acs=(ed?'<button type="button" class="btn" id="ed-pedido">Editar dados</button><button type="button" class="btn perigo" id="canc-pedido">Cancelar pedido</button>':'')+(canc&&d.pode_admin?'<button type="button" class="btn" id="reabrir-pedido">Reabrir pedido</button>':'');
+  h+='<section class="fcab"><div class="l1"><h1>'+esc(p.num)+'</h1>'+tag(SIT_P[p.sit]||SIT_P.E)+(p.tipo?'<span class="selo n">'+(p.tipo==='mae'?'Pedido mãe':'Remessa de pedido mãe')+'</span>':'')+(acs?'<div class="ac">'+acs+'</div>':'')+'</div>'+
+    '<dl class="kv">'+kvi('Unidade',esc(p.un))+kvi('Laboratório',esc(lab.nomeLongo||lab.nome))+kvi(lab.numNome||'Nº no laboratório',esc(p.numLab||'—'))+kvi('Valor total',p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total),'valor')+'</dl>'+
+    (canc?'<div class="cancelado"><b>Cancelado:</b> '+esc(p.cancMot||'motivo não informado')+'</div>':'')+
+    (p.obs?'<div><span class="nota">Observação</span><div>'+esc(p.obs)+'</div></div>':'')+'</section>';
+
+  // ----- o que falta
+  if(p.acoes.length){
+    h+='<section class="falta" aria-label="O que falta"><h2>O que falta</h2><ul>'+p.acoes.map(function(a){
+      var alvo='';ALVO_ACAO.forEach(function(x){if(!alvo&&x[0].test(a.txt))alvo=x[1]});
+      return '<li>'+(alvo?'<button type="button" class="link" data-ancora="'+alvo+'">'+esc(a.txt)+'</button>':esc(a.txt))+'</li>'}).join('')+'</ul></section>';
+  }
+
+  // ----- itens
+  var sItens=p.itens.length?'<div class="tabela cartoes"><table><thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>'+
+     p.itens.map(function(it){return '<tr><td class="c1">'+esc(it.prod)+'</td><td class="cl r num"><span class="rot-m">Qtd </span>'+Number(it.qtd).toLocaleString('pt-BR')+'</td><td class="cl r num"><span class="rot-m">Preço </span>'+R(it.preco)+'</td><td class="c2 r num">'+R(it.total)+'</td></tr>'}).join('')+
+     '</tbody><tfoot><tr><td colspan="3" class="c1">Produtos</td><td class="c2 r num">'+R(p.sub)+'</td></tr><tr><td colspan="3" class="c1">Frete</td><td class="c2 r num">'+R(p.frete)+'</td></tr></tfoot></table></div>'
+    :'<div class="cp"><span class="fraco">Nenhum item cadastrado. No sistema antigo este pedido não tinha os produtos lançados.</span>'+(p.frete?'<span>Frete: '+R(p.frete)+'</span>':'')+'</div>';
+  sItens+='<div class="cp"><span class="nota">Itens e preços '+(p.origem==='migracao'?'migrados do sistema antigo':'lançados no sistema')+' (preço congelado na data do pedido).</span></div>';
+
+  // ----- entrega
   var podeReceber=pode&&['E','L','C'].indexOf(p.sit)>=0;
+  var rastSit=p.rastSit||(ant.quality?ant.quality+' (sistema antigo)':'');
+  var et=[
+    {k:'Enviado ao laboratório',v:ver(p.env),c:p.env?'ok':''},
+    {k:'No laboratório',v:p.conf?ver(p.conf):(p.etapa?esc(p.etapa.charAt(0)+p.etapa.slice(1).toLowerCase()):'—'),e:p.conf?'confirmado pelo laboratório'+(p.etapa?' · etapa na planilha: '+esc(p.etapa.toLowerCase()):''):(p.etapa?'etapa na planilha do laboratório':''),c:p.exp||p.rec?'ok':(p.conf||p.etapa?'at':'')},
+    {k:p.prev?'Previsão de saída':'Prazo do laboratório',v:ver(p.prazo),e:(p.atraso>0?'<span class="vermelho">'+plural(p.atraso,'dia','dias')+' além do prazo</span>':(p.prev?'informada pelo laboratório':(p.env?lab.prazo+' dias corridos do envio':'')))+(p.etapaPrev&&p.etapaPrev!==p.prev?' · planilha: '+ver(p.etapaPrev):''),c:p.atraso>0?'ru':(p.exp||p.rec?'ok':'')},
+    {k:'Saiu do laboratório',v:ver(p.exp),e:(p.rast?'rastreio '+esc(p.rast):'')+(rastSit?(p.rast?' · ':'')+esc(rastSit):'')+(p.diasCaminho?' · há '+p.diasCaminho+' dias':''),c:p.exp?(p.diasCaminho>7?'at':'ok'):''},
+    {k:'Recebido na unidade',v:ver(p.rec),e:(p.rec&&p.recPor?'confirmado por '+esc(p.recPor):'')+(p.recObs?(p.rec&&p.recPor?' · ':'')+esc(p.recObs):''),c:p.rec?'ok':''}];
+  if(canc) et.forEach(function(x){if(x.c!=='ok')x.c='x'});
+  var sEnt='<div class="cp"><ol class="etapas">'+et.map(function(x){return '<li class="'+x.c+'"><span class="k">'+esc(x.k)+'</span><span class="v">'+x.v+'</span>'+(x.e?'<span class="e">'+x.e+'</span>':'')+'</li>'}).join('')+'</ol>'+
+    '<span class="nota">'+(p.origem==='migracao'?'Datas migradas do sistema antigo':'Datas lançadas no sistema')+(p.etapa||p.prev?'; etapa e previsão vêm da planilha do laboratório':'')+'; rastreio consultado na Quality pelo robô diário.</span></div>'+
+    (podeReceber?'<div id="f-receber-box"></div>':'');
+
+  // ----- pagamento (boleto e comprovante ficam na própria parcela)
   var livres=p.parc.filter(function(x){return x.livre>0});
   var temP=p.parc.some(function(x){return x.sit==='P'||x.sit==='B'});
-  var h='<div class="f-cab"><div class="tt"><h2>'+esc(p.num)+'</h2><div class="meta">'+esc(p.un)+' · '+esc(lab.nome)+' · '+esc(lab.numNome)+': '+esc(p.numLab||'—')+'</div><div style="margin-top:6px">'+tag(SIT_P[p.sit]||SIT_P.E)+'</div></div><button type="button" class="fechar" id="fechar" aria-label="Fechar ficha">×</button></div><div class="f-corpo">';
-  if(p.acoes.length||podeReceber){
-    h+='<div class="sec" style="border-left:4px solid var('+(p.acoes[0]?p.acoes[0].cor:'--amber')+')"><h4>O que fazer agora</h4>'+p.acoes.map(function(a){return '<div style="margin-bottom:4px">→ <b>'+esc(a.txt)+'</b></div>'}).join('');
-    h+='<div class="acoes-f">'+(podeReceber?'<button type="button" class="botao mini" id="b-receber">Confirmar recebimento</button>':'')+
-      (pode&&livres.length?'<button type="button" class="botao mini sec" data-anexar-ped="1">Anexar comprovante</button>':'')+
-      (temP?'<button type="button" class="botao mini sec" data-cob-ped="'+esc(p.id)+'">Mensagem ao laboratório</button>':'')+'</div>';
-    if(podeReceber) h+='<div id="f-receber-box"></div>';
-    h+='</div>';
-  }
-  if(canc) h+='<div class="sec"><h4>Cancelado</h4><div>'+esc(p.cancMot||'Motivo não informado')+'</div></div>';
-  h+='<div class="sec"><h4>Linha do tempo</h4><ol class="tempo">'+et.map(function(x){return '<li class="'+x.c+'"><b>'+x.n+'</b><span>'+esc(x.d)+'</span>'+(x.e?'<em>'+esc(x.e)+'</em>':'')+'</li>'}).join('')+'</ol>'+
-   '<div class="origem">Origem: '+(p.origem==='migracao'?'datas migradas do sistema antigo':'datas lançadas no sistema')+(p.etapa?'; etapa “'+esc(p.etapa)+'” veio da planilha do laboratório'+(p.etapaPrev?' (previsão '+dt(p.etapaPrev)+')':''):'')+'. Prazo do laboratório: '+lab.prazo+' dias corridos a partir do envio'+(p.prev?' (aqui vale a previsão informada)':'')+'.'+
-   (p.rec&&p.recPor?' Recebimento confirmado por '+esc(p.recPor)+'.':'')+'</div></div>';
-  var arqPor=function(cods){return p.arq.filter(function(a){return cods.indexOf(a.cod)>=0})};
-  var usados={};
-  var lnk=function(a,rot){usados[a.id]=1;return a.abre?'<button type="button" class="link" data-abrir="'+esc(a.id)+'">'+esc(rot||'abrir')+'</button>':'<span class="fraco" title="Arquivo do sistema antigo, ainda não copiado">'+esc(rot||'')+' (no sistema antigo)</span>'};
-  var arqLista=function(l){return '<ul class="arqs">'+l.map(function(a){usados[a.id]=1;return '<li><span class="nm">'+esc(a.nome)+(a.subst?' <span class="tag t-gray mini">substituído</span>':'')+'</span><span class="ct">'+esc(a.cat)+'</span><span class="ab">'+(a.abre?'<button type="button" class="link" data-abrir="'+esc(a.id)+'">abrir</button>':'<span class="fraco">no sistema antigo</span>')+'</span></li>'}).join('')+'</ul>'};
-  var porId={}; p.arq.forEach(function(a){porId[a.id]=a});
-  var colA='', colB='';
-  // Itens
-  var ed=pode&&!canc;
-  colA+='<div class="sec"><h4>Itens <small>'+plural(p.itens.length,'produto','produtos')+(ed?' <button type="button" class="link" id="ed-itens">'+(p.itens.length?'editar itens':'completar itens')+'</button>':'')+'</small></h4>';
-  if(p.itens.length){
-    colA+='<table class="t"><thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>'+
-     p.itens.map(function(it){return '<tr><td>'+esc(it.prod)+'</td><td class="r">'+Number(it.qtd).toLocaleString('pt-BR')+'</td><td class="r">'+R(it.preco)+'</td><td class="r">'+R(it.total)+'</td></tr>'}).join('')+
-     '</tbody><tfoot><tr><td colspan="3">Produtos</td><td class="r">'+R(p.sub)+'</td></tr><tr><td colspan="3" style="font-weight:400">Frete</td><td class="r" style="font-weight:400">'+R(p.frete)+'</td></tr><tr><td colspan="3">Total do pedido</td><td class="r">'+R(p.total)+'</td></tr></tfoot></table>';
-  } else colA+='<div class="fraco">Nenhum item cadastrado. No sistema antigo este pedido não tinha os produtos lançados.</div>';
-  colA+='<div class="origem">Origem: itens e preços '+(p.origem==='migracao'?'migrados do sistema antigo':'lançados no sistema')+' (preço congelado na data do pedido).</div></div>';
-  // Pedido e receita
-  var docs=arqPor(['pedido_venda','espelho','receita','termo']);
-  colA+='<div class="sec"><h4>Pedido e receita <small>'+plural(docs.length,'arquivo','arquivos')+'</small></h4>'+(docs.length?arqLista(docs):'<div class="fraco">Nenhum pedido de venda, espelho ou receita anexado.</div>')+'</div>';
-  // Dados
-  colA+='<div class="sec"><h4>Dados do pedido <small>'+(ed?'<button type="button" class="link" id="ed-pedido">editar dados</button> · <button type="button" class="link perigo" id="canc-pedido">cancelar pedido</button>':'')+(canc&&d.pode_admin?'<button type="button" class="link" id="reabrir-pedido">reabrir pedido</button>':'')+'</small></h4><dl class="kv"><dt>Nº interno</dt><dd>'+esc(p.num)+'</dd><dt>'+esc(lab.numNome)+'</dt><dd>'+esc(p.numLab||'—')+'</dd><dt>Laboratório</dt><dd>'+esc(lab.nomeLongo)+'</dd><dt>Condição padrão</dt><dd>'+esc(lab.cond)+'</dd>'+
-   '<dt>Enviado ao laboratório</dt><dd>'+dt(p.env)+'</dd>'+(p.conf?'<dt>Confirmado pelo lab.</dt><dd>'+dt(p.conf)+'</dd>':'')+(p.prev?'<dt>Previsão de saída</dt><dd>'+dt(p.prev)+'</dd>':'')+(p.exp?'<dt>Saiu do laboratório</dt><dd>'+dt(p.exp)+'</dd>':'')+(p.rec?'<dt>Recebido na unidade</dt><dd>'+dt(p.rec)+'</dd>':'')+'<dt>Frete</dt><dd>'+R(p.frete)+'</dd>'+
-   (p.rast?'<dt>Rastreio</dt><dd>'+esc(p.rast)+'</dd>':'')+
-   (p.tipo?'<dt>Tipo</dt><dd>'+(p.tipo==='mae'?'Pedido mãe':'Remessa de pedido mãe')+'</dd>':'')+
-   (p.obs?'<dt>Observação</dt><dd>'+esc(p.obs)+'</dd>':'')+
-   (p.recObs?'<dt>Obs. do recebimento</dt><dd>'+esc(p.recObs)+'</dd>':'')+
-   '</dl><div class="origem">Origem: '+(p.leg?'migrado do sistema antigo (referência '+esc(p.leg)+')':'lançado no sistema novo')+'.</div></div>';
-  // Parcelas e boletos
-  var boletosLivres=arqPor(['boleto']).filter(function(a){return !p.parc.some(function(x){return x.boleto===a.id})});
-  colB+='<div class="sec"><h4>Parcelas e boletos <small>'+R(p.parc.reduce(function(t,x){return t+x.valor},0))+' cobrados pelo laboratório'+(ed?' · <button type="button" class="link" id="nova-parc">+ lançar parcela</button>':'')+'</small></h4>';
-  if(!p.parc.length) colB+='<div class="fraco">Nenhuma parcela cadastrada.</div>';
+  var compVisto={}, bolVisto={};
+  var sPag='<div class="parcs">'+(p.parc.length?'':'<div class="cp"><span class="fraco">Nenhuma parcela cadastrada.</span></div>');
   p.parc.forEach(function(x){
-    var s=SIT_PC[x.sit]||SIT_PC.A;
+    var s=SIT_PC[x.sit]||SIT_PC.A, rot=x.n+'/'+x.de;
     var btn='';
-    if((x.sit==='P'||x.sit==='B')) btn+='<button type="button" class="botao mini sec" data-cob-ped="'+esc(p.id)+'">Mensagem ao laboratório</button>';
     if(pode&&x.livre>0) btn+='<button type="button" class="botao mini'+(x.sit==='V'||x.sit==='N'?'':' sec')+'" data-anexar-parc="'+esc(x.id)+'">'+(x.sit==='V'||x.sit==='A'?'Pagar esta parcela':'Anexar comprovante')+'</button>';
     if(pode&&!x.nossa&&x.bOmie&&x.sit!=='X') btn+='<button type="button" class="botao mini sec" data-baixa-parc="'+esc(x.id)+'">Baixar sem comprovante</button>';
-    var tres='<div class="tres">'+
-      '<span><b>Omie</b> '+marca(x.bOmie,x.exOmie)+'</span>'+
-      '<span><b>Planilha</b> '+marca(x.bPlan,x.exPlan)+'</span>'+
-      '<span><b>Nosso sistema</b> '+(x.nossa?'<span class="ok">✓</span> '+(x.pago>=x.valor-0.01?'comprovante':'sem comprovante '+dt(x.bSis)+(x.bSisPor?' por '+esc(x.bSisPor):'')):'<span class="nao">✗</span> falta')+'</span></div>';
-    var bol=x.boleto&&porId[x.boleto]?porId[x.boleto]:null;
-    colB+='<div class="parc"><div><b>Parcela '+x.n+' de '+x.de+'</b> · vence '+dt(x.venc)+' · '+esc(FORMA[x.forma]||x.forma)+'</div><div class="v">'+R(x.valor)+'</div>'+
-     tres+(x.cancMot?'<div class="d">'+esc(x.cancMot)+'</div>':'')+(x.bSisObs?'<div class="d">Obs. da baixa: '+esc(x.bSisObs)+'</div>':'')+
-     '<div class="d">Boleto: '+(bol?esc(bol.nome)+' '+lnk(bol,'abrir'):(x.forma==='boleto'?'<span class="fraco">não ligado a esta parcela'+(boletosLivres.length?' (veja os boletos do pedido abaixo)':'')+'</span>':'<span class="fraco">não se aplica</span>'))+'</div>'+
-     '<div class="d">Comprovante: '+((x.pagamentos||[]).length?x.pagamentos.map(function(g){var a=porId[g.arquivo_id];if(a)usados[a.id]=1;return R(g.valor)+' em '+dt(g.pago_em)+' ('+esc(FORMA[g.forma]||g.forma)+') '+(g.abre?'<button type="button" class="link" data-abrir="'+esc(g.arquivo_id)+'">abrir</button>':'<span class="fraco">(no sistema antigo)</span>')}).join(' · '):(x.bSis?'<span class="fraco">baixa sem comprovante (Omie conferida)</span>':'<span class="fraco">nenhum</span>'))+'</div>'+
-     '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','t-blue']:s)+btn+'</div>'+(ed&&x.sit!=='X'?'<div class="d"><button type="button" class="link" data-ed-parc="'+esc(x.id)+'">editar parcela</button> · <button type="button" class="link perigo" data-canc-parc="'+esc(x.id)+'">cancelar parcela</button></div>':'')+'</div>';
+    if(ed&&x.sit!=='X') btn+='<button type="button" class="link" data-ed-parc="'+esc(x.id)+'">editar parcela</button><button type="button" class="link perigo" data-canc-parc="'+esc(x.id)+'">cancelar parcela</button>';
+    var nos=x.nossa?(x.pago>=x.valor-0.01?'<span class="ok">comprovante</span>':'<span class="ok">sem comprovante, '+ver(x.bSis)+'</span>'+(x.bSisPor?' por '+esc(x.bSisPor):'')):'<span class="nao">falta</span>';
+    var bol=x.boleto?(porId[x.boleto]||null):null, lb='';
+    if(bol){lb=bolVisto[bol.id]?'mesmo boleto da parcela '+bolVisto[bol.id]:esc(bol.nome)+' '+abre(bol);bolVisto[bol.id]=bolVisto[bol.id]||rot}
+    else if(x.forma==='boleto') lb='<span class="fraco">não ligado a esta parcela</span>';
+    if(x.bolNum) lb+=(lb?' · ':'')+'nº '+esc(x.bolNum);
+    if(x.bolLinha) lb+=(lb?' · ':'')+'linha digitável '+esc(x.bolLinha);
+    var comp=(x.pagamentos||[]).map(function(g){
+      var a=porId[g.arquivo_id]||{id:g.arquivo_id,nome:g.arquivo,abre:g.abre};
+      var t=R(g.valor)+' ('+esc(FORMA[g.forma]||g.forma)+')';
+      if(compVisto[a.id]) return t+' — mesmo comprovante da parcela '+compVisto[a.id];
+      compVisto[a.id]=rot; return t+' pago em '+ver(g.pago_em)+' · '+esc(a.nome||'comprovante')+' '+abre(a);
+    }).join('<br>');
+    sPag+='<div class="parc'+(x.sit==='X'?' canc':'')+'"><div><b>Parcela '+x.n+' de '+x.de+'</b> · vence '+ver(x.venc)+' · '+esc(FORMA[x.forma]||x.forma)+'</div><div class="v num">'+R(x.valor)+'</div>'+
+      '<div class="tres"><span><b>Omie</b> '+(x.exOmie===false?'<span class="fraco">não se aplica</span>':(x.bOmie?'<span class="ok">'+ver(x.bOmie)+'</span>':'<span class="nao">falta</span>'))+'</span>'+
+      '<span><b>Planilha</b> '+(x.exPlan===false?'<span class="fraco">não se aplica</span>':(x.bPlan?'<span class="ok">'+ver(x.bPlan)+'</span>':'<span class="nao">falta</span>'))+'</span><span><b>Nosso sistema</b> '+nos+'</span></div>'+
+      (lb?'<div class="d"><b>Boleto:</b> '+lb+'</div>':'')+
+      '<div class="d"><b>Comprovante:</b> '+(comp||(x.bSis?'<span class="fraco">baixa sem comprovante (Omie conferida)</span>':'<span class="fraco">nenhum</span>'))+'</div>'+
+      (x.bSisObs?'<div class="d"><b>Obs. da baixa:</b> '+esc(x.bSisObs)+'</div>':'')+(x.cancMot?'<div class="d"><b>Cancelada:</b> '+esc(x.cancMot)+'</div>':'')+
+      '<div class="a">'+tag(x.prox7?['Vence em até 7 dias','i']:s)+btn+'</div></div>';
   });
-  if(p.parc.length){var origs={};p.parc.forEach(function(x){origs[x.orig]=1});colB+='<div class="origem">Origem das parcelas: '+esc(Object.keys(origs).join('; '))+'. A parcela só finaliza com as 3 baixas: Omie, planilha do laboratório e nosso sistema.</div>'}
-  if(boletosLivres.length) colB+='<div class="sub-sec"><b>Boletos do pedido</b> <span class="fraco">(vieram do sistema antigo sem indicação da parcela)</span>'+arqLista(boletosLivres)+'</div>';
-  // comprovantes soltos
-  var compSoltos=arqPor(['comprovante']).filter(function(a){return !p.parc.some(function(x){return (x.pagamentos||[]).some(function(g){return g.arquivo_id===a.id})})});
-  if(compSoltos.length) colB+='<div class="sub-sec"><b>Outros comprovantes</b>'+arqLista(compSoltos)+'</div>';
-  colB+='</div>';
-  // Notas fiscais
-  colB+='<div class="sec"><h4>Notas fiscais <small>'+plural(p.nf.length,'nota','notas')+'</small></h4>';
-  if(p.nf.length) colB+='<table class="t"><thead><tr><th>Número</th><th>Emissão</th><th class="r">Frete</th><th class="r">Total</th><th>PDF</th><th>XML</th></tr></thead><tbody>'+p.nf.map(function(n){
-     var pdf=n.danfe_id?(porId[n.danfe_id]||{id:n.danfe_id,abre:n.d_abre}):null, xml=n.xml_id?(porId[n.xml_id]||{id:n.xml_id,abre:n.x_abre}):null;
-     return '<tr><td>'+esc(n.num)+(n.canc?' '+tag(['Cancelada','t-gray']):'')+'</td><td>'+dt(n.emis)+'</td><td class="r">'+R(n.frete)+'</td><td class="r">'+R(n.total)+'</td><td>'+(pdf?lnk(pdf,'PDF'):'<span class="fraco">—</span>')+'</td><td>'+(xml?lnk(xml,'XML'):'<span class="fraco">—</span>')+'</td></tr>'}).join('')+'</tbody></table>';
-  else colB+='<div class="fraco">Nenhuma nota fiscal ligada a este pedido.</div>';
-  var nfSoltas=arqPor(['nota_fiscal','xml_nf']).filter(function(a){return !usados[a.id]});
-  if(nfSoltas.length) colB+='<div class="sub-sec"><b>Arquivos de nota sem número ligado</b>'+arqLista(nfSoltas)+'</div>';
-  colB+='<div class="origem">Origem: notas migradas do sistema antigo e do Portal Omie.</div></div>';
-  // Outros anexos
+  sPag+='</div>';
+  var bolSoltos=arqPor(['boleto']).filter(function(a){return !bolVisto[a.id]});
+  if(bolSoltos.length) sPag+='<div class="sub-t">Boletos sem parcela indicada <span class="nota">(vieram do sistema antigo assim)</span></div><ul class="arqs">'+bolSoltos.map(arqLi).join('')+'</ul>';
+  var compSoltos=arqPor(['comprovante']).filter(function(a){return !compVisto[a.id]});
+  if(compSoltos.length) sPag+='<div class="sub-t">Comprovantes sem parcela indicada</div><ul class="arqs">'+compSoltos.map(arqLi).join('')+'</ul>';
+  if(p.parc.length){var origs={};p.parc.forEach(function(x){origs[x.orig]=1});sPag+='<div class="cp"><span class="nota">A parcela só finaliza com as 3 baixas: Omie, planilha do laboratório e nosso sistema. Origem das parcelas: '+esc(Object.keys(origs).join('; '))+'.</span></div>'}
+  var acPag=(ed?'<button type="button" class="botao mini sec" id="nova-parc">Lançar parcela</button>':'')+(pode&&livres.length?'<button type="button" class="botao mini sec" data-anexar-ped="1">Anexar comprovante</button>':'')+(temP?'<button type="button" class="botao mini sec" data-cob-ped="'+esc(p.id)+'">Mensagem ao laboratório</button>':'');
+
+  // ----- notas fiscais (DANFE, XML, Portal Omie, conferência)
+  var links=(H.tem&&H.links)||[], linkUsado={};
+  p.nf.forEach(function(n){if(n.link)linkUsado[n.link]=1});
+  var sNf='';
+  if(p.nf.length){
+    sNf+='<div class="tabela cartoes"><table><thead><tr><th>Número</th><th>Emissão</th><th>Situação na Omie</th><th class="r">Frete</th><th class="r">Total</th><th>Arquivos</th></tr></thead><tbody>'+p.nf.map(function(n){
+      var pdf=n.danfe_id?(porId[n.danfe_id]||{id:n.danfe_id,abre:n.d_abre}):null, xml=n.xml_id?(porId[n.xml_id]||{id:n.xml_id,abre:n.x_abre}):null;
+      var lk=n.link||'';
+      if(!lk){var m=links.filter(function(l){return !linkUsado[l.url]&&new RegExp('\\b'+String(n.num).replace(/\W/g,'')+'\\b').test(l.rotulo)})[0];if(m){lk=m.url}}
+      if(lk) linkUsado[lk]=1;
+      var arqs=[];
+      if(pdf) arqs.push(pdf.abre?'<button type="button" class="link" data-abrir="'+esc(pdf.id)+'">DANFE</button>':'DANFE <span class="fraco">(no sistema antigo)</span>'), usados[pdf.id]=1;
+      if(xml) arqs.push(xml.abre?'<button type="button" class="link" data-abrir="'+esc(xml.id)+'">XML</button>':'XML <span class="fraco">(no sistema antigo)</span>'), usados[xml.id]=1;
+      if(lk) arqs.push('<a class="link" href="'+esc(lk)+'" target="_blank" rel="noopener noreferrer">Portal Omie</a>');
+      return '<tr><td class="c1"><b>NF '+esc(n.num)+'</b>'+(n.canc?' '+tag(['Cancelada','n']):'')+'</td><td class="cl num"><span class="rot-m">Emissão </span>'+ver(n.emis)+'</td><td class="cl"><span class="rot-m">Omie </span>'+esc(n.sit_omie||'—')+'</td><td class="cl r num"><span class="rot-m">Frete </span>'+R(n.frete)+'</td><td class="c2 r num">'+R(n.total)+'</td><td class="cl">'+(arqs.join(' · ')||'<span class="fraco">—</span>')+'</td></tr>'}).join('')+'</tbody></table></div>';
+  } else sNf+='<div class="cp"><span class="fraco">Nenhuma nota fiscal ligada a este pedido.</span></div>';
+  var nfSoltas=arqPor(['nota_fiscal','xml_nf']);
+  if(nfSoltas.length) sNf+='<div class="sub-t">Arquivos de nota sem número ligado</div><ul class="arqs">'+nfSoltas.map(arqLi).join('')+'</ul>';
+  var linksSoltos=links.filter(function(l){return !linkUsado[l.url]});
+  if(linksSoltos.length) sNf+='<div class="sub-t">Portal Omie</div><ul class="arqs">'+linksSoltos.map(function(l){return '<li><span class="nm">'+esc(l.rotulo)+'</span><a class="link" href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer">abrir</a></li>'}).join('')+'</ul>';
+  var cf=H.tem&&H.conf;
+  if(cf) sNf+='<div class="sub-t">Conferência pedido × nota fiscal <span class="nota">('+esc(cf.nfs||'')+(cf.em?' · '+ver(cf.em):'')+', feita no sistema antigo)</span></div><div class="cp">'+
+      (cf.ok?'<span class="ok">Confere</span>':'<ul class="lista-simples">'+cf.diverg.map(function(x){return '<li class="vermelho">'+esc(x)+'</li>'}).join('')+'</ul>')+
+      (cf.avisos.length?'<ul class="lista-simples">'+cf.avisos.map(function(x){return '<li class="fraco">'+esc(x)+'</li>'}).join('')+'</ul>':'')+'</div>';
+
+  // ----- outros anexos (receita, pedido de venda, termo e demais que não apareceram acima)
   var outros=p.arq.filter(function(a){return !usados[a.id]});
-  colB+='<div class="sec"><h4>Outros anexos <small>'+plural(outros.length,'arquivo','arquivos')+'</small></h4>'+(outros.length?arqLista(outros):'<div class="fraco">Nenhum.</div>')+'</div>';
-  if(p.leg&&/^cp:/.test(p.leg)) colB+='<div class="sec" id="sec-legado"><h4>Sistema antigo <small>dados, links da Omie, conferência e histórico</small></h4><div class="fraco">Carregando…</div></div>';
-  h+='<div class="f-cols"><div class="col">'+colA+'</div><div class="col">'+colB+'</div></div>';
-  h+='<div class="origem">Arquivos marcados “no sistema antigo” ainda não foram copiados para o sistema novo. Os enviados por aqui abrem com “abrir”.</div>';
-  h+='</div>';
+  var sOut=outros.length?'<ul class="arqs">'+outros.map(arqLi).join('')+'</ul>':'<div class="cp"><span class="fraco">Nenhum.</span></div>';
+  if(p.arq.some(function(a){return !a.abre})) sOut+='<div class="cp"><span class="nota">Arquivos marcados “no sistema antigo” ainda não foram copiados para o sistema novo.</span></div>';
+
+  // ----- do sistema antigo: só campos preenchidos que não existem no sistema novo
+  var sAnt='', campos=[];
+  if(H.tem){
+    var nomes={}; p.arq.forEach(function(a){nomes[a.nome]=1});
+    var temPV=p.arq.some(function(a){return a.cod==='pedido_venda'});
+    var v=function(x){return x!=null&&x!==''&&x!==false};
+    if(v(ant.prescritor)) campos.push(['Prescritor',esc(ant.prescritor)]);
+    if(v(ant.crbm)) campos.push(['CRBM',esc(ant.crbm)]);
+    if(v(ant.dataReceita)&&!datas[String(ant.dataReceita).slice(0,10)]) campos.push(['Data da receita',ver(ant.dataReceita)]);
+    if(v(ant.pedidoVenda)&&!nomes[ant.pedidoVenda]&&!temPV) campos.push(['Pedido de venda',esc(ant.pedidoVenda)]);
+    if(v(ant.pendPV)){var pv=ant.pendPV;campos.push(['Pendência no pedido de venda',typeof pv==='object'?esc((pv.itens||[]).join('; ')||'sim')+(pv.em&&!datas[String(pv.em).slice(0,10)]?' (em '+ver(pv.em)+')':''):esc(pv)])}
+    if(v(ant.obsLab)&&ant.obsLab!==p.obs) campos.push(['Observação do laboratório',esc(ant.obsLab)]);
+    if(ant.foraPlanilha) campos.push(['Fora da planilha do laboratório','sim']);
+    if(!p.parc.length){
+      if(v(ant.sitPag)) campos.push(['Situação de pagamento',esc(ant.sitPag)]);
+      if(v(ant.forma)) campos.push(['Forma de pagamento',esc(ant.forma)]);
+    }
+    [['dataPag','Data de pagamento'],['dataPagLab','Data de pagamento na planilha do laboratório']].forEach(function(c){var x=ant[c[0]];if(v(x)&&!datas[String(x).slice(0,10)])campos.push([c[1],ver(x)])});
+    if(campos.length) sAnt='<dl class="kv kv3 cp">'+campos.map(function(c){return kvi(c[0],c[1])}).join('')+'</dl>';
+  }
+
+  // ----- histórico: sistema novo e sistema antigo mesclados por data (mais recente primeiro)
+  var ev=(H.novos||[]).map(function(x){return {em:x.em,por:x.por,t:x.texto}}).concat(((H.tem&&H.historico)||[]).map(function(x){return {em:x.em,por:x.por+(x.auto&&x.auto!==x.por?' ('+x.auto+')':''),t:x.texto,ant:1}}));
+  ev.sort(function(a,b){var x=new Date(String(a.em).replace(' ','T')).getTime()||0,y=new Date(String(b.em).replace(' ','T')).getTime()||0;return y-x});
+  var sHist=H.erro?'<div class="cp"><span class="vermelho">'+esc(H.erro)+'</span></div>':(ev.length?'<ul class="hist">'+ev.map(function(x){return '<li><span class="q">'+dtHora(x.em)+'</span><span class="t">'+esc(x.t)+'</span><span class="o">'+esc(x.por||'?')+(x.ant?' · <span class="selo n">sistema antigo</span>':'')+'</span></li>'}).join('')+'</ul>':'<div class="cp"><span class="fraco">Nenhuma alteração registrada.</span></div>');
+  sHist+='<div class="cp"><span class="nota">A carga inicial vinda do sistema antigo não aparece como alteração.</span></div>';
+
+  // ----- montagem em ordem fixa
+  var secs=[['sec-itens','Itens'],['sec-entrega','Entrega'],['sec-pag','Pagamento'],['sec-nf','Notas fiscais'],['sec-anexos','Outros anexos']];
+  if(sAnt) secs.push(['sec-antigo','Do sistema antigo']);
+  secs.push(['sec-hist','Histórico']);
+  h+='<nav class="ancoras" aria-label="Seções da ficha">'+secs.map(function(s){return '<button type="button" class="link" data-ancora="'+s[0]+'">'+s[1]+'</button>'}).join('')+'</nav>';
+  h+=secao('sec-itens','Itens',plural(p.itens.length,'produto','produtos'),ed?'<button type="button" class="botao mini sec" id="ed-itens">'+(p.itens.length?'Editar itens':'Completar itens')+'</button>':'',sItens);
+  h+=secao('sec-entrega','Entrega','',podeReceber?'<button type="button" class="botao mini" id="b-receber">Confirmar recebimento</button>':'',sEnt);
+  h+=secao('sec-pag','Pagamento',R(p.parc.filter(function(x){return x.sit!=='X'}).reduce(function(t,x){return t+x.valor},0))+' cobrados'+(lab.cond&&lab.cond!=='—'?' · condição padrão: '+esc(lab.cond):''),acPag,sPag);
+  h+=secao('sec-nf','Notas fiscais',plural(p.nf.length,'nota','notas'),'',sNf);
+  h+=secao('sec-anexos','Outros anexos',plural(outros.length,'arquivo','arquivos'),'',sOut);
+  if(sAnt) h+=secao('sec-antigo','Do sistema antigo','nº '+esc(H.id)+' · somente leitura','',sAnt);
+  h+=secao('sec-hist','Histórico',plural(ev.length,'registro','registros'),'',sHist);
   return h;
 }
-var API_HIST=SUPA_URL+'/functions/v1/pedidos-historico';
-function dtHora(s){if(!s)return '—';var d=new Date(s);return isNaN(d)?esc(s):d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}
-async function carregaLegado(id){
-  var el=$('#sec-legado'); if(!el) return;
+var seqFicha=0;
+async function abrirFicha(id,semHistorico){
+  if(estado.tela!=='pedido') estado.voltar=estado.tela||'pedidos';
+  var mesmo=estado.tela==='pedido'&&estado.fichaId===id, y=window.scrollY;
+  estado.tela='pedido'; estado.fichaId=id; marcaMenu();
+  if(!semHistorico) navega('#pedido/'+id);
+  var meu=++seqFicha;
+  if(!mesmo){$('#tela').innerHTML='<p class="vazio">Carregando a ficha do pedido…</p>';window.scrollTo(0,0)}
   try{
-    var r=await api('historico',{pedido_id:id},API_HIST);
-    if(!fichaAtual||fichaAtual.pedido.id!==id||!(el=$('#sec-legado')))return;
-    if(!r.tem){el.remove();return}
-    var dados=Object.keys(r.dados).filter(function(k){var v=r.dados[k];return v!==null&&v!==undefined&&v!==''});
-    var h='<h4>Sistema antigo <small>nº '+esc(r.id)+' · somente leitura</small></h4>';
-    if(dados.length) h+='<dl class="kv">'+dados.map(function(k){var v=r.dados[k];return '<dt>'+esc(k)+'</dt><dd>'+esc(/^\d{4}-\d{2}-\d{2}$/.test(String(v))?dt(v):(typeof v==='object'?JSON.stringify(v):v))+'</dd>'}).join('')+'</dl>';
-    if(r.links.length) h+='<div class="sub-sec"><b>Links</b><ul class="arqs">'+r.links.map(function(l){return '<li><span class="nm">'+esc(l.rotulo)+'</span><span class="ab"><a class="link" href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer">abrir</a></span></li>'}).join('')+'</ul></div>';
-    if(r.conf) h+='<div class="sub-sec"><b>Conferência pedido × nota fiscal</b> <span class="fraco">('+esc(r.conf.nfs||'')+(r.conf.em?' · '+dt(r.conf.em):'')+')</span>'+
-      (r.conf.ok?'<div class="d"><span class="ok">✓</span> Confere</div>':'<ul class="lista-simples">'+r.conf.diverg.map(function(x){return '<li class="vermelho">'+esc(x)+'</li>'}).join('')+'</ul>')+
-      (r.conf.avisos.length?'<ul class="lista-simples">'+r.conf.avisos.map(function(x){return '<li class="fraco">'+esc(x)+'</li>'}).join('')+'</ul>':'')+'</div>';
-    h+='<details class="sub-sec"><summary><b>Histórico de alterações</b> <span class="fraco">('+r.historico.length+')</span></summary><ul class="hist">'+
-      r.historico.map(function(x){return '<li><span class="fraco">'+dtHora(x.em)+' · '+esc(x.por||'?')+(x.auto&&x.auto!==x.por?' ('+esc(x.auto)+')':'')+'</span><br>'+esc(x.texto)+'</li>'}).join('')+'</ul></details>';
-    el.innerHTML=h;
-  }catch(x){var e=$('#sec-legado');if(e)e.innerHTML='<h4>Sistema antigo</h4><div class="fraco">'+esc(x.message)+'</div>'}
+    var r=await Promise.all([api('pedido',{pedido_id:id}),api('historico',{pedido_id:id},API_HIST).catch(function(x){return {erro:'Histórico indisponível: '+x.message}})]);
+    if(meu!==seqFicha||estado.tela!=='pedido') return;
+    fichaAtual=r[0];
+    $('#tela').innerHTML=ficha(r[0],r[1]);
+    if(mesmo) window.scrollTo(0,y); else {var h=$('#tela h1');if(h){h.setAttribute('tabindex','-1');h.focus({preventScroll:true})}}
+  }catch(x){if(meu===seqFicha&&x.status!==401&&x.status!==403)$('#tela').innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}
 }
-var ultimoFoco=null;
-async function abrirFicha(id){
-  var f=$('#ficha'); if(!f.classList.contains('on')) ultimoFoco=document.activeElement;
-  f.innerHTML='<div class="f-cab"><div class="tt"><h2>Carregando…</h2></div><button type="button" class="fechar" id="fechar" aria-label="Fechar ficha">×</button></div><div class="f-corpo"><p class="vazio">Carregando a ficha do pedido…</p></div>';
-  f.classList.add('on'); f.setAttribute('aria-hidden','false'); $('#veu').classList.add('on'); $('#fechar').focus();
-  try{
-    var d=await api('pedido',{pedido_id:id}); fichaAtual=d;
-    if(!f.classList.contains('on')) return;
-    f.innerHTML=ficha(d); $('.f-corpo',f).scrollTop=0; $('#fechar').focus(); carregaLegado(id);
-  }catch(x){if(x.status!==401&&x.status!==403)$('.f-corpo',f).innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}
-}
-function fecharFicha(){var f=$('#ficha');if(!f.classList.contains('on'))return;f.classList.remove('on');f.setAttribute('aria-hidden','true');$('#veu').classList.remove('on');fichaAtual=null;if(ultimoFoco&&ultimoFoco.focus)ultimoFoco.focus()}
 function aposGravar(){
   cache.inicio=null; cache.pag=null; cache.pedidos=null; estado.sel={};
-  if(fichaAtual) abrirFicha(fichaAtual.pedido.id);
-  ir(estado.tela,true);
+  if(estado.tela==='pedido'&&estado.fichaId) abrirFicha(estado.fichaId,true);
+  else ir(estado.tela,true);
 }
 
-/* confirmar recebimento (dentro da ficha) */
+/* confirmar recebimento (dentro da ficha, seção Entrega) */
 function formReceber(){
   var box=$('#f-receber-box'); if(!box) return;
   var hoje=fichaAtual.hoje||HOJE, env=fichaAtual.pedido.env||'';
@@ -518,15 +598,17 @@ async function enviarReceber(e){
   catch(x){bt.disabled=false;bt.textContent='Confirmar recebimento';if($('#r-erro'))$('#r-erro').innerHTML='<div class="erro">'+esc(x.message)+'</div>'}
 }
 
-/* ---------- janelas ---------- */
+/* ---------- janelas (ficam na própria página, que rola inteira) ---------- */
 var dlgFoco=null;
 function abrirDlg(titulo,corpo){
-  var d=$('#dlg'); dlgFoco=document.activeElement;
+  var d=$('#dlg'); if(!d.classList.contains('on')) dlgFoco=document.activeElement;
   d.innerHTML='<div class="dlg"><div class="dlg-cab"><h2 id="dlg-titulo">'+esc(titulo)+'</h2><button type="button" class="fechar" id="dlg-fechar" aria-label="Fechar">×</button></div>'+corpo+'</div>';
-  d.classList.add('on'); var f=$('.dlg input:not([type=checkbox]),.dlg textarea,.dlg button.botao',d); (f||$('#dlg-fechar')).focus();
+  d.style.top=(window.scrollY+72)+'px';
+  d.classList.add('on'); $('#dlg-fundo').classList.add('on');
+  var f=$('.dlg input:not([type=checkbox]),.dlg textarea,.dlg button.botao',d); (f||$('#dlg-fechar')).focus({preventScroll:true});
 }
-function fecharDlg(){var d=$('#dlg');if(!d.classList.contains('on'))return;d.classList.remove('on');d.innerHTML='';if(dlgFoco&&dlgFoco.focus)dlgFoco.focus()}
-
+function fecharDlg(){var d=$('#dlg');if(!d.classList.contains('on'))return;d.classList.remove('on');$('#dlg-fundo').classList.remove('on');d.innerHTML='';if(dlgFoco&&dlgFoco.focus&&document.contains(dlgFoco))dlgFoco.focus({preventScroll:true})}
+function ajustaTextos(){document.querySelectorAll('.txt-cob').forEach(function(t){t.style.height='auto';t.style.height=(t.scrollHeight+4)+'px'})}
 
 /* ---------- edição ---------- */
 function campoD(rot,html,dica){return '<label class="campo"><span>'+esc(rot)+(dica?' <small>('+esc(dica)+')</small>':'')+'</span>'+html+'</label>'}
@@ -624,7 +706,7 @@ function abrirAnexar(lista,marcadas,contexto){
   var formas=lista.filter(function(x){return marcadas.indexOf(x.id)>=0}).map(function(x){return x.forma});
   var forma=formas[0]&&FORMAS_OK.indexOf(formas[0])>=0?formas[0]:'pix';
   var h='<form id="f-anexo" novalidate><div class="dlg-corpo">'+
-    '<p style="margin:0 0 10px;color:var(--muted);font-size:14px">'+esc(contexto)+' Cada comprovante vale para uma unidade (CNPJ). O valor é distribuído nas parcelas marcadas, da que vence primeiro para a última.</p>'+
+    '<p style="margin:0 0 10px;color:var(--muted)">'+esc(contexto)+' Cada comprovante vale para uma unidade (CNPJ). O valor é distribuído nas parcelas marcadas, da que vence primeiro para a última.</p>'+
     '<div class="campo"><span>Parcelas pagas com este comprovante</span></div><div class="escolha">'+
     lista.map(function(x){return '<label><input type="checkbox" data-anx="'+esc(x.id)+'"'+(marcadas.indexOf(x.id)>=0?' checked':'')+'><span>'+esc(x.num)+' · parcela '+x.n+'/'+x.de+'<small>'+esc(x.un)+' · vence '+dt(x.venc)+(x.livre<x.valor?' · já pago '+R(x.valor-x.livre):'')+'</small></span><span class="v">'+R(x.livre)+'</span></label>'}).join('')+'</div>'+
     '<div class="duas"><label class="campo"><span>Valor pago (R$)</span><input class="ent num" id="a-valor" inputmode="decimal" autocomplete="off" required></label>'+
@@ -641,7 +723,7 @@ var baixaIds=[];
 function abrirBaixa(lista){
   baixaIds=lista.map(function(x){return x.id});
   var hoje=(fichaAtual&&fichaAtual.hoje)||(cache.pag&&cache.pag.hoje)||HOJE;
-  var h='<form id="f-baixa" novalidate><div class="dlg-corpo"><p style="margin:0 0 10px;color:var(--muted);font-size:14px">Use quando a Omie do laboratório já baixou e você não tem o comprovante. Fica registrado quem deu a baixa e quando.</p>'+
+  var h='<form id="f-baixa" novalidate><div class="dlg-corpo"><p style="margin:0 0 10px;color:var(--muted)">Use quando a Omie do laboratório já baixou e você não tem o comprovante. Fica registrado quem deu a baixa e quando.</p>'+
     '<ul class="arqs">'+lista.map(function(x){return '<li><span class="nm">'+esc(x.num)+' · parcela '+x.n+'/'+x.de+' <small class="fraco">'+esc(x.un||'')+' · Omie '+dt(x.bOmie)+'</small></span><span class="ab">'+R(x.valor)+'</span></li>'}).join('')+'</ul>'+
     '<div class="duas"><label class="campo"><span>Data da baixa</span><input class="ent" type="date" id="b-data" value="'+hoje+'" max="'+hoje+'" required></label></div>'+
     '<label class="campo"><span>Observação <small>(opcional)</small></span><textarea class="ent" id="b-obs" maxlength="500" placeholder="Ex.: conferido na Omie; comprovante não localizado"></textarea></label>'+
@@ -700,16 +782,16 @@ async function abrirCobranca(dados){
     if(!$('#dlg').classList.contains('on')) return;
     var h='<div class="dlg-corpo">';
     if(!r.textos.length) h+='<p>'+esc(r.mensagem||'Nada a cobrar.')+'</p>';
-    else h+='<p style="margin:0 0 12px;color:var(--muted);font-size:14px">Confira, copie e envie ao laboratório pelo canal de costume (e-mail ou WhatsApp). <b>O sistema não envia nada sozinho.</b></p>'+
-      r.textos.map(function(t,i){return '<h3 style="margin-top:4px">'+esc(t.lab)+' · '+plural(t.qtd,'parcela','parcelas')+' · '+R(t.total)+'</h3><textarea class="txt-cob" id="cob-'+i+'" readonly>'+esc(t.texto)+'</textarea><div class="acoes-f" style="margin:0 0 16px"><button type="button" class="botao mini" data-copiar="cob-'+i+'">Copiar mensagem</button></div>'}).join('');
+    else h+='<p style="margin:0 0 12px;color:var(--muted)">Confira, copie e envie ao laboratório pelo canal de costume (e-mail ou WhatsApp). <b>O sistema não envia nada sozinho.</b></p>'+
+      r.textos.map(function(t,i){return '<h3>'+esc(t.lab)+' · '+plural(t.qtd,'parcela','parcelas')+' · '+R(t.total)+'</h3><textarea class="txt-cob" id="cob-'+i+'" readonly>'+esc(t.texto)+'</textarea><div class="acoes-f" style="margin:0 0 16px"><button type="button" class="botao mini" data-copiar="cob-'+i+'">Copiar mensagem</button></div>'}).join('');
     h+='</div><div class="dlg-pe"><button type="button" class="botao sec" id="dlg-cancela">Fechar</button></div>';
-    $('#dlg .dlg').innerHTML=$('#dlg .dlg-cab').outerHTML+h;
+    $('#dlg .dlg').innerHTML=$('#dlg .dlg-cab').outerHTML+h; ajustaTextos();
   }catch(x){if($('#dlg .dlg-corpo'))$('#dlg .dlg-corpo').innerHTML='<div class="erro">'+esc(x.message)+'</div>'}
 }
 async function copiar(id,bt){
   var t=$('#'+id); var ok=false;
   try{await navigator.clipboard.writeText(t.value);ok=true}catch(e){try{t.focus();t.select();ok=document.execCommand('copy')}catch(e2){}}
-  bt.textContent=ok?'Copiado ✓':'Selecione o texto e copie (Ctrl+C)'; setTimeout(function(){bt.textContent='Copiar mensagem'},2500);
+  bt.textContent=ok?'Copiado':'Selecione o texto e copie (Ctrl+C)'; setTimeout(function(){bt.textContent='Copiar mensagem'},2500);
 }
 async function abrirArquivo(id){
   try{var r=await api('abrir_arquivo',{arquivo_id:id});window.open(r.url,'_blank','noopener')}catch(x){avisar(x.message)}
@@ -718,36 +800,53 @@ async function abrirArquivo(id){
 /* ---------- navegação ---------- */
 var tAviso;
 function avisar(t){var a=$('#aviso');a.textContent=t;a.classList.add('on');clearTimeout(tAviso);tAviso=setTimeout(function(){a.classList.remove('on')},4200)}
+var TELAS=['inicio','pedidos','pagamentos'];
+function navega(h){try{if(location.hash!==h)history.pushState(null,'',h)}catch(e){}}
 function render(){
   var t=estado.tela, el=$('#tela');
-  document.querySelectorAll('.aba[data-ir]').forEach(function(b){if(b.dataset.ir===t)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+  marcaMenu();
+  if(t==='pedido') return;
   if(t==='pedidos') el.innerHTML=telaPedidos(cache.pedidos);
   else if(t==='pagamentos') el.innerHTML=telaPagamentos(cache.pag);
-  else el.innerHTML=cache.inicio?telaInicio(cache.inicio):'<p class="vazio">Carregando os números…</p>';
+  else el.innerHTML=telaInicio(cache.inicio);
 }
 async function ir(t,recarregar){
-  estado.tela=t; try{history.replaceState(null,'','#'+t)}catch(e){}
+  if(TELAS.indexOf(t)<0) t='inicio';
+  estado.tela=t; fichaAtual=null; navega('#'+t);
   render(); if(!recarregar) window.scrollTo(0,0);
   if(t==='pedidos'){cache.pedidos=null;render();carregarPedidos()}
   else if(t==='pagamentos'){if(!cache.pag||recarregar)carregarPagamentos();else if(estado.grupo){var g=$('#g-'+estado.grupo);if(g)g.scrollIntoView({block:'start'})}}
-  else{try{cache.inicio=await api('inicio');if(estado.tela==='inicio')render()}catch(x){if(estado.tela==='inicio'&&x.status!==401&&x.status!==403)$('#tela').innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}}
+  else{try{var d=await api('inicio',{unidade_id:estado.unidade});cache.inicio=d;if(estado.tela==='inicio')render()}catch(x){if(estado.tela==='inicio'&&x.status!==401&&x.status!==403)$('#tela').innerHTML='<p class="vazio">'+esc(x.message)+'</p>'}}
 }
+function rota(){
+  var h=(location.hash||'').slice(1), m=/^pedido\/([0-9a-f-]{36})$/i.exec(h);
+  fecharDlg();
+  if(m){abrirFicha(m[1],true);return}
+  ir(TELAS.indexOf(h)>=0?h:'inicio');
+}
+window.addEventListener('popstate',function(){if(EU&&!$('#menu').hidden)rota()});
+function fechaPops(exceto){['#usr-pop'].forEach(function(s){var p=$(s);if(p&&p.id!==exceto&&!p.hidden){p.hidden=true;var b=$('#usr-btn');if(b)b.setAttribute('aria-expanded','false')}})}
 var tBusca;
 document.addEventListener('click',function(e){
-  var b=e.target.closest('button,[data-p],input[type=checkbox]'); if(!b) return;
+  var b=e.target.closest('button,a[data-ir],[data-p],input[type=checkbox]');
+  if(!e.target.closest('.uwrap')) fechaPops();
+  if(!b) return;
   if(b.matches('input[type=checkbox]')){
     if(b.id==='so-acao'){estado.acao=b.checked;cache.pedidos=null;render();carregarPedidos();e.stopPropagation();return}
     if(b.dataset.selp){estado.sel[b.dataset.selp]=b.checked;var y=window.scrollY;render();window.scrollTo(0,y)}
     else if(b.dataset.anx) atualizaValorAnexo();
     e.stopPropagation(); return;
   }
+  if(b.dataset.ir){e.preventDefault();estado.especial='';estado.grupo='';ir(b.dataset.ir);return}
+  if(b.id==='usr-btn'){var pp=$('#usr-pop');pp.hidden=!pp.hidden;b.setAttribute('aria-expanded',String(!pp.hidden));return}
   if(b.id==='sair'){sair();return}
   if(b.id==='recarregar'){iniciar();return}
-  if(b.id==='tema'){trocaTema();return}
+  if(b.id==='tema'||b.id==='tema2'){trocaTema();return}
   if(b.id==='dlg-fechar'||b.id==='dlg-cancela'){fecharDlg();return}
   if(b.id==='a-mesmo'){anexo.repetidoOk=true;enviarAnexo();return}
   if(b.dataset.copiar){copiar(b.dataset.copiar,b);return}
   if(b.dataset.abrir){abrirArquivo(b.dataset.abrir);return}
+  if(b.dataset.ancora){var s=$('#'+b.dataset.ancora);if(s)s.scrollIntoView({block:'start'});return}
   if(b.id==='b-receber'){formReceber();return}
   if(b.id==='r-cancela'){$('#f-receber-box').innerHTML='';return}
   if(b.dataset.cobPed){abrirCobranca({pedido_id:b.dataset.cobPed});return}
@@ -757,7 +856,7 @@ document.addEventListener('click',function(e){
     abrirAnexar(lista,b.dataset.anexarParc?[b.dataset.anexarParc]:lista.filter(function(x){return p.parc.some(function(y){return y.id===x.id&&(y.sit==='V'||y.sit==='N'||y.prox7)})}).map(function(x){return x.id}),'Pedido '+p.num+'.');
     return;
   }
-  if(b.dataset.baixaParc){var pp=fichaAtual.pedido,xx=pp.parc.filter(function(y){return y.id===b.dataset.baixaParc})[0];abrirBaixa([{id:xx.id,num:pp.num,un:pp.un,n:xx.n,de:xx.de,valor:xx.valor,bOmie:xx.bOmie}]);return}
+  if(b.dataset.baixaParc){var pp2=fichaAtual.pedido,xx=pp2.parc.filter(function(y){return y.id===b.dataset.baixaParc})[0];abrirBaixa([{id:xx.id,num:pp2.num,un:pp2.un,n:xx.n,de:xx.de,valor:xx.valor,bOmie:xx.bOmie}]);return}
   if(b.id==='baixa-sel'){abrirBaixa(selecionadas());return}
   if(b.id==='ed-pedido'){abrirEditarPedido();return}
   if(b.id==='canc-pedido'){abrirCancelar('pedido',fichaAtual.pedido.id,'Cancelar pedido '+fichaAtual.pedido.num,'O pedido continua no sistema, marcado como cancelado, com o motivo. Só o administrador pode reabrir.');return}
@@ -770,30 +869,25 @@ document.addEventListener('click',function(e){
   if(b.classList.contains('it-rem')){b.closest('tr').remove();totalItens();return}
   if(b.id==='anexar-sel'){var sl=selecionadas();abrirAnexar(sl,sl.map(function(x){return x.id}),'Parcelas marcadas na tela Pagamentos.');return}
   if(b.id==='limpar-sel'){estado.sel={};render();return}
-  if(b.dataset.ir){estado.especial='';estado.grupo='';ir(b.dataset.ir);return}
   if(b.id==='novo'){avisar('Novo pedido ainda não faz parte desta versão. Vem na próxima etapa.');return}
-  if(b.id==='fechar'){fecharFicha();return}
   if(b.dataset.card){var c=b.dataset.card.split(':');
     if(c[0]==='pedidos'){estado.especial=c[1];estado.sit='';estado.lab='';estado.acao=false;estado.busca='';ir('pedidos')}
-    else{estado.grupo=c[1];estado.abertos={};estado.unid='';ir('pagamentos')}
+    else{estado.grupo=c[1];estado.abertos={};ir('pagamentos')}
     return}
   if(b.dataset.sit&&b.classList.contains('barra')){estado.especial='';estado.sit=b.dataset.sit;estado.lab='';estado.acao=false;ir('pedidos');return}
-  if(b.dataset.f){var f=b.dataset.f,v=b.dataset.v;
-    if(f==='sit')estado.sit=v; else if(f==='lab')estado.lab=v; else if(f==='acao')estado.acao=!estado.acao; else if(f==='esp')estado.especial='';
-    cache.pedidos=null;render();carregarPedidos();return}
-  if(b.id==='limpar-filtros'){estado.sit='';estado.lab='';estado.acao=false;estado.pUn='';estado.pDe='';estado.pAte='';estado.pPag='';estado.busca='';estado.especial='';cache.pedidos=null;render();carregarPedidos();return}
-  if(b.id==='limpar-g'){estado.unid='';estado.gLab='';estado.gForma='';estado.gDe='';estado.gAte='';estado.gBusca='';render();return}
+  if(b.dataset.f==='esp'){estado.especial='';cache.pedidos=null;render();carregarPedidos();return}
+  if(b.id==='limpar-filtros'){estado.sit='';estado.lab='';estado.acao=false;estado.pDe='';estado.pAte='';estado.pPag='';estado.busca='';estado.especial='';cache.pedidos=null;render();carregarPedidos();return}
+  if(b.id==='limpar-g'){estado.gLab='';estado.gForma='';estado.gDe='';estado.gAte='';estado.gBusca='';render();return}
   if(b.id==='maisPed'){b.disabled=true;b.textContent='Carregando…';carregarPedidos(true);return}
   if(b.dataset.g){var id=b.dataset.g;var cur=b.getAttribute('aria-expanded')==='true';estado.abertos[id]=!cur;render();return}
   if(b.dataset.mais){estado.abertos['lim'+b.dataset.mais]=(estado.abertos['lim'+b.dataset.mais]||25)+50;render();return}
   if(b.dataset.p!==undefined){abrirFicha(b.dataset.p);return}
 });
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){if($('#dlg').classList.contains('on'))fecharDlg();else fecharFicha();return}
-  if((e.key==='Enter'||e.key===' ')&&e.target.matches('.pl[data-p],tr.lp[data-p]')){e.preventDefault();abrirFicha(e.target.dataset.p)}
+  if(e.key==='Escape'){if($('#dlg').classList.contains('on'))fecharDlg();else fechaPops();return}
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches('tr.lp[data-p]')){e.preventDefault();abrirFicha(e.target.dataset.p)}
 });
-$('#veu').addEventListener('click',fecharFicha);
-$('#dlg').addEventListener('click',function(e){if(e.target.id==='dlg')fecharDlg()});
+$('#dlg-fundo').addEventListener('click',fecharDlg);
 document.addEventListener('submit',function(e){
   var id=e.target.id;
   if(id==='f-login')entrar(e); else if(id==='f-senha')salvarSenha(e); else if(id==='f-mfa')confirmarMfa(e);
@@ -808,7 +902,9 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
-  if(t.id==='unid'){estado.unid=t.value;render();return}
+  if(t.id==='unid-sel'){
+    estado.unidade=t.value; guardaUnidade(); montaUnidades(); estado.sel={}; cache.inicio=null; cache.pedidos=null;
+    ir(estado.tela==='pedido'?estado.voltar:estado.tela,true); return}
   if(t.classList&&t.classList.contains('it-prod')){var o=t.selectedOptions[0],pi=t.closest('tr').querySelector('.it-preco');if(o&&o.dataset.preco!==''&&o.dataset.preco!=null)pi.value=valBR(Number(o.dataset.preco));totalItens();return}
   if(t.dataset.pf){estado[t.dataset.pf]=t.value;cache.pedidos=null;render();carregarPedidos();return}
   if(t.dataset.gf){estado[t.dataset.gf]=t.value;render();return}
@@ -817,7 +913,7 @@ document.addEventListener('change',function(e){
 /* tema */
 var TEMAS=['auto','light','dark'],NOME_T={auto:'automático',light:'claro',dark:'escuro'},tema='auto';
 try{tema=localStorage.getItem('dh-tema')||'auto'}catch(e){}
-function aplicaTema(){if(tema==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',tema);$('#tema').textContent='Tema: '+NOME_T[tema]}
+function aplicaTema(){if(tema==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',tema);$('#tema').textContent='Tema: '+NOME_T[tema];var t2=$('#tema2');if(t2)t2.textContent='Tema: '+NOME_T[tema]}
 function trocaTema(){tema=TEMAS[(TEMAS.indexOf(tema)+1)%3];try{localStorage.setItem('dh-tema',tema)}catch(e){}aplicaTema()}
 aplicaTema();
 

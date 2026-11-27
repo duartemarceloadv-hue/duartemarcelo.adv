@@ -11,6 +11,8 @@
   --n:#4F5C69; --n-bg:#E9EDF1; --i:#1D5A85; --i-bg:#E2EDF6; --s:#1B6E41; --s-bg:#E0F1E6;
   --a:#855400; --a-bg:#FBEFD6; --d:#A8231A; --d-bg:#FBE7E5;
   --shadow:0 1px 2px rgba(20,35,45,.06); --overlay:rgba(16,24,32,.4);
+  /* nomes antigos das cores usados pela API nas ações (--red etc.) apontam para as 5 cores do kit */
+  --red:var(--d); --amber:var(--a); --blue:var(--i); --green:var(--s); --gray:var(--n); --teal:var(--i);
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
