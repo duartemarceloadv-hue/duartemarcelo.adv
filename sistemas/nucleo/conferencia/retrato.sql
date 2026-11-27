@@ -45,4 +45,20 @@ select json_build_object(
   'evento_ate_agora', (select count(*) from pedidos_novo.evento),
   -- ids, atualizado_em e nº DH dos pedidos: a troca de chave da unidade não pode mexer neles
   'pedido_atualizado_hash', (select md5(string_agg(id::text||atualizado_em::text||coalesce(num_interno,''), ',' order by id)) from pedidos_novo.pedido)
+,
+  -- 27/11 (0015/0016): conteúdo linha a linha (sem colunas novas criadas pelas migrations 0015/0016)
+  'linhas_hash', json_build_object(
+    'pedido', (select md5(string_agg((to_jsonb(x) - 'teste')::text, ',' order by x.id)) from pedidos_novo.pedido x),
+    'pedido_item', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.id)) from pedidos_novo.pedido_item x),
+    'parcela', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.id)) from pedidos_novo.parcela x),
+    'pagamento', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.id)) from pedidos_novo.pagamento x),
+    'pagamento_parcela', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.pagamento_id, x.parcela_id)) from pedidos_novo.pagamento_parcela x),
+    'nota_fiscal', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.id)) from pedidos_novo.nota_fiscal x),
+    'nota_item', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.id)) from pedidos_novo.nota_item x),
+    'nota_pedido', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.nota_id, x.pedido_id)) from pedidos_novo.nota_pedido x),
+    'receita', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.id)) from pedidos_novo.receita x),
+    'receita_item', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.receita_id, x.produto_id)) from pedidos_novo.receita_item x),
+    'legado_doc', (select md5(string_agg(to_jsonb(x)::text, ',' order by x.col, x.id)) from pedidos_novo.legado_doc x),
+    'evento_ate_id', (select max(id) from pedidos_novo.evento),
+    'evento_hash', (select md5(string_agg((to_jsonb(x) - 'justificativa')::text, ',' order by x.id)) from pedidos_novo.evento x))
 ) retrato;
