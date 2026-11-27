@@ -11,7 +11,14 @@ Objetivo do dono: desligar o sistema antigo; **tudo** o que existe nele precisa 
 ## Falta trazer (ordem de trabalho)
 1. **Documentos (arquivos)** — 1.344 arquivos / ~207 MB do bucket `anexos` + `injemed`. Hoje o sistema novo só aponta para o antigo.
    O banco único está no plano gratuito (1 GB) e já usa ~853 MB (Documentos) → **precisa do Supabase Pro** para copiar.
-   Inclui: 10 anexos de 26/11, 34 removidos (guardar como "removido", com quem/quando), 119 documentos de clínicas, 4 do Injemed (modelos/termo).
+   Inclui: 10 anexos de 26/11, 34 removidos (guardar como "removido", com quem/quando), 4 do Injemed (modelos/termo).
+   **Documentos de clínicas (conferido 27/11):** dos 155 arquivos fora de pedidos, 114 já estão (idênticos) no sistema de Documentos,
+   35 são comprovantes de parcela já cadastrados no novo, e 3 (contrato social/cartão CNPJ de Uberlândia e Juiz de Fora; termo CP de Serra)
+   têm outra versão no Documentos → não vêm. **Vão para a pasta de Contagem no sistema de Documentos (decisão do dono):**
+   "Termo de Fornecimento para Clínica" (provável termo Injemed) e "Certidão de Regularidade Profissional (quitada)".
+   1 PDF solto de 14/10 (sem ligação) fica guardado junto com os removidos.
+   **Duplicados:** 37 arquivos repetidos (45 cópias extras); o novo guarda 1 cópia por conteúdo (sha256) ligada a todos os pedidos.
+   Conferir: pedidos de venda iguais nos pedidos DH-2026-0352 e 0353.
 2. **Histórico de alterações** — 6.178 registros (`logs`) de 05/10 a 26/11: importar como histórico do pedido/clínica (somente leitura).
 3. **Campos sem lugar ainda**: links do portal por pedido, conferência pedido × NF (`confNF`, inclui diferenças de preço),
    situação de pagamento antiga (`sitPag`, `dataPag`, `dataPagLab`), dados de receita/prescritor no pedido, pedido de venda (`pedidoVenda`/`pendPV`),
