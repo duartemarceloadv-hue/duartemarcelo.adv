@@ -242,8 +242,13 @@ const FILTRO: Record<string, (p: Ped) => boolean> = {
 };
 
 // ---------- ações de leitura ----------
-async function aInicio(c: Ctx) {
-  const { HOJE, h7, PED, PARC } = await carregar(c);
+async function aInicio(c: Ctx, b: any) {
+  const ca = await carregar(c);
+  const { HOJE, h7 } = ca;
+  // filtro opcional pela unidade escolhida no cabeçalho (o escopo de acesso já foi aplicado em carregar)
+  const un = b?.unidade_id ? uuid(b.unidade_id, "unidade") : "";
+  const PED = un ? ca.PED.filter((p) => p.unidade_id === un) : ca.PED;
+  const PARC = un ? ca.PARC.filter((x) => PED.some((p) => p.id === x.pedido_id)) : ca.PARC;
   const soma = (l: any[], f: (x: any) => number) => r2(l.reduce((t, x) => t + f(x), 0));
   const pc = (f: (x: Parc) => boolean) => { const l = PARC.filter(f); return { n: l.length, v: soma(l, (x) => x.valor) }; };
   const pd = (f: (x: Ped) => boolean) => { const l = PED.filter(f); return { n: l.length, v: soma(l, (x) => x.total) }; };
@@ -344,7 +349,7 @@ async function aPedido(c: Ctx, b: any) {
   const itens = await sql`select pr.descricao prod, i.qtd::float8 qtd, i.preco_unit::float8 preco, i.total::float8 total
     from pedidos_novo.pedido_item i join pedidos_novo.produto pr on pr.id = i.produto_id where i.pedido_id = ${id} order by pr.descricao`;
   const nf = await sql`select n.id, n.numero num, n.emissao::text emis, n.total::float8 total, n.frete::float8 frete, n.cancelada canc,
-    n.danfe_id, d.bucket = ${BUCKET} d_abre, n.xml_id, x.bucket = ${BUCKET} x_abre
+    n.danfe_id, d.bucket = ${BUCKET} d_abre, n.xml_id, x.bucket = ${BUCKET} x_abre, n.link, n.situacao_omie sit_omie
     from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id
     left join pedidos_novo.arquivo d on d.id = n.danfe_id left join pedidos_novo.arquivo x on x.id = n.xml_id
     where np.pedido_id = ${id} order by n.emissao, n.numero`;
@@ -354,11 +359,17 @@ async function aPedido(c: Ctx, b: any) {
     from pedidos_novo.pagamento_parcela pp join pedidos_novo.pagamento g on g.id = pp.pagamento_id
     join pedidos_novo.arquivo a on a.id = g.comprovante_id
     join pedidos_novo.parcela pa on pa.id = pp.parcela_id where pa.pedido_id = ${id} order by g.pago_em`;
-  const bol = await sql`select id, boleto_arquivo_id from pedidos_novo.parcela where pedido_id = ${id}`;
+  const bol = await sql`select id, boleto_arquivo_id, boleto_linha, boleto_numero from pedidos_novo.parcela where pedido_id = ${id}`;
   for (const x of p.parc) {
     x.pagamentos = pags.filter((g) => g.parcela_id === x.id);
-    x.boleto = bol.find((y) => y.id === x.id)?.boleto_arquivo_id || null;
+    const y = bol.find((y) => y.id === x.id);
+    x.boleto = y?.boleto_arquivo_id || null;
+    x.bolLinha = y?.boleto_linha || null;
+    x.bolNum = y?.boleto_numero || null;
   }
+  const [rq] = await sql`select rastreio_situacao, rastreio_em::text rastreio_em from pedidos_novo.pedido where id = ${id}`;
+  p.rastSit = rq?.rastreio_situacao || null;
+  p.rastEm = rq?.rastreio_em || null;
   p.itens = itens; p.nf = nf;
   p.arq = arq.map((a) => ({ id: a.id, nome: a.nome, cod: a.categoria, cat: CAT[a.categoria] || a.categoria, subst: a.subst, abre: a.abre, em: a.enviado_em, por: a.enviado_por }));
   p.obsLonga = p.obs;
@@ -366,6 +377,11 @@ async function aPedido(c: Ctx, b: any) {
   const unidades = await sql`select id, nome from pedidos_novo.unidade where ativo and ${e === null ? sql`true` : sql`id = any(${arr(e)}::uuid[])`} order by nome`;
   p.numLabRaw = p.numLab;
   return { hoje: HOJE, lab: LABS[p.lab], pedido: p, unidades, pode_gravar: PAPEIS_ESCRITA.includes(c.papel), pode_admin: c.papel === "admin" };
+}
+async function aUnidades(c: Ctx) {
+  const e = escopo(c);
+  const l = await sql`select id, nome from pedidos_novo.unidade where ativo and ${e === null ? sql`true` : sql`id = any(${arr(e)}::uuid[])`} order by nome`;
+  return { unidades: l };
 }
 async function aPagamentos(c: Ctx, b: any) {
   const { HOJE, h7, PED, PARC } = await carregar(c);
@@ -823,7 +839,7 @@ Deno.serve(async (req) => {
     if (acao === "trocar_senha") return resp(200, await aTrocarSenha(c, b));
     exigeLiberado(c);
     const acoes: Record<string, (c: Ctx, b: any) => Promise<unknown>> = {
-      inicio: aInicio, pedidos: aPedidos, pedido: aPedido, pagamentos: aPagamentos,
+      inicio: aInicio, unidades: aUnidades, pedidos: aPedidos, pedido: aPedido, pagamentos: aPagamentos,
       confirmar_recebimento: aConfirmarRecebimento, anexar_comprovante: aAnexarComprovante,
       cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo, baixar_sem_comprovante: aBaixarSemComprovante,
       editar_pedido: aEditarPedido, cancelar_pedido: aCancelarPedido, reabrir_pedido: aReabrirPedido,
