@@ -18,3 +18,4 @@
 | 28/11/2026 | D7 | **Lote permitido só para itens iguais, com prévia** antes de confirmar; cada item registrado em separado com nome e justificativa. |
 | 28/11/2026 | D10 | **Sócio entra só com senha** (sem segunda etapa). Administradora e financeiro continuam com aplicativo autenticador. |
 | 28/11/2026 | D21 | **Quem paga as parcelas dos laboratórios é o financeiro**; o sócio não autoriza. Operações **não recebe os comprovantes**: confirma o pagamento pela baixa na Omie que o laboratório disponibiliza (regra mantida: baixa sem comprovante só quando a Omie já baixou). Eventualmente chegam comprovantes de cartão, que são anexados quando houver. |
+| 28/11/2026 | Data da troca (Laboratórios) | **Assim que ficar pronto** (não esperar fevereiro). Condições: lista de aceite toda conferida, teste do dono no site de teste, cópia de segurança funcionando; janela entre os dias 05 e 20 do mês (longe da receita do dia 01), evitando 14/12 e o recesso. |
