@@ -194,3 +194,15 @@ com a chave guardada no Vault (`pedidos_novo_cron_key`; no código só o SHA-256
 **Regra: nenhuma data inventada (27/11/2026).** Previsão só a informada pelo laboratório; o prazo de 30 dias serve
 apenas para marcar atraso. As 2 datas de recebimento estimadas na migração (envio + 2 dias) foram apagadas
 (DH-2026-0014 e DH-2026-0211, ficam para confirmar).
+
+## Preparação da troca (28/11/2026)
+
+- **D14 (somar todas as NFs):** conferido. O sistema novo não tem regra de R$ 500,00 (SQL e funções `omie`/`conectores`); a regra do antigo
+  (`omie-sync`: NF < R$ 500 não entrava no campo "NF" do pedido) não foi migrada. As 7 NFs abaixo de R$ 500 (9 ligações a pedidos, R$ 1.212,82)
+  já entram na conferência. Recalculadas as 484: **0 mudanças** (319 conferidos, 60 com diferença). Nenhuma migration foi necessária.
+- **Migration `0017_troca_preparada.sql`** (aplicada como `pedidos_novo_0017_troca_preparada`; não muda dados): `num_interno_anterior`,
+  `troca_retrato()`, `troca_diferencas()` e `troca_laboratorios(p_simular)` (apaga TST, renumera D13, liga a numeração oficial; simulação desfaz tudo).
+  Simulação de 28/11: 53 renumerados, próximo DH-2026-0480, tudo igual antes/depois. Roteiro: `ROTEIRO-TROCA.md`; lista de aceite: `aceite-troca.md`.
+- **CORS do Cloudflare Pages** (`operacoes-drhair.pages.dev` e prévias `*.operacoes-drhair.pages.dev`), mantendo o Netlify: `pedidos-historico` **v6 publicada**
+  (testada: aceita as duas origens e o Netlify, recusa outras); `pedidos-api` **v10 no repositório, ainda não publicada**.
+- **Arquivos do antigo:** cópia suspensa (o dono decide se os arquivos ficam onde estão). Levantamento em `aceite-troca.md`, item B5.
