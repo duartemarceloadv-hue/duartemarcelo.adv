@@ -16,3 +16,4 @@
 | 28/11/2026 | D14 | **Somar todas as notas fiscais**, inclusive abaixo de R$ 500,00 (a regra do antigo não é migrada). Hoje são 9 notas não canceladas abaixo de R$ 500,00 (R$ 6,00 a R$ 357,00; soma R$ 1.212,82), uma em cada pedido; a conferência pedido × NF desses 9 pedidos pode mudar. |
 | 28/11/2026 | D25 | **Trazer os 21 logins do Pedidos antigo com a mesma senha** na troca, se o formato das senhas for compatível (conferir antes); senão, cada um cria senha nova pelo "esqueci a senha". |
 | 28/11/2026 | D7 | **Lote permitido só para itens iguais, com prévia** antes de confirmar; cada item registrado em separado com nome e justificativa. |
+| 28/11/2026 | D10 | **Sócio entra só com senha** (sem segunda etapa). Administradora e financeiro continuam com aplicativo autenticador. |
