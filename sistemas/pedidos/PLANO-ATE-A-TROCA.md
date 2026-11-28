@@ -26,4 +26,4 @@ Detalhe item a item: `aceite-troca.md`. Decisões: `../sistema-unico/decisoes-do
 3. Papel de cada um dos 21 usuários do antigo.
 4. Pendências de conferência: datas de recebimento DH-2026-0014 e 0211; PVs iguais 0352/0353; provável pedido duplicado 125076 e 125076-2.
 5. Dia da troca (entre 05 e 20, longe de 14/12 e do recesso).
-6. Dono das contas: decidido (organização da Operações, ela como única dona). Falta criar a organização, transferir o repositório e então ligar o Cloudflare (pausado, erro 8000011, nenhum projeto criado).
+6. Dono das contas: decidido (organização da Operações como dona principal; duartemarceloadv-hue como segunda dona). Falta criar a organização, transferir o repositório e então ligar o Cloudflare (pausado, erro 8000011, nenhum projeto criado).
