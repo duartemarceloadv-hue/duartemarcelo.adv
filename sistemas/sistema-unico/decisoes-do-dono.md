@@ -17,3 +17,4 @@
 | 28/11/2026 | D25 | **Trazer os 21 logins do Pedidos antigo com a mesma senha** na troca, se o formato das senhas for compatível (conferir antes); senão, cada um cria senha nova pelo "esqueci a senha". |
 | 28/11/2026 | D7 | **Lote permitido só para itens iguais, com prévia** antes de confirmar; cada item registrado em separado com nome e justificativa. |
 | 28/11/2026 | D10 | **Sócio entra só com senha** (sem segunda etapa). Administradora e financeiro continuam com aplicativo autenticador. |
+| 28/11/2026 | D21 | **Quem paga as parcelas dos laboratórios é o financeiro**; o sócio não autoriza. Operações **não recebe os comprovantes**: confirma o pagamento pela baixa na Omie que o laboratório disponibiliza (regra mantida: baixa sem comprovante só quando a Omie já baixou). Eventualmente chegam comprovantes de cartão, que são anexados quando houver. |
