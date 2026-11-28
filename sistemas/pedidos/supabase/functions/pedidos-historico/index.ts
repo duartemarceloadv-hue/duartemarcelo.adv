@@ -6,13 +6,14 @@
 // Mesmas regras de acesso da pedidos-api: login, troca de senha feita, autenticador para quem exige (admin/financeiro),
 // escopo de unidades — tudo lido do núcleo (nucleo.acesso(email, 'laboratorios')) desde 27/11/2026.
 // v4 (27/11/2026): justificativa das correções, rascunho/envio, receita ligada e decisões da fila Notas e PV.
+// v6 (28/11/2026): origens do Cloudflare Pages (operacoes-drhair) no CORS; nada mais muda.
 // Resposta compatível com a versão anterior (dados, links, conf, historico); acrescenta "campos" e "novos".
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 2, idle_timeout: 20 });
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
-const ORIGENS = [/^https:\/\/pedidos-novo-drhair\.netlify\.app$/, /^https:\/\/[a-z0-9-]+--pedidos-novo-drhair\.netlify\.app$/, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
+const ORIGENS = [/^https:\/\/pedidos-novo-drhair\.netlify\.app$/, /^https:\/\/[a-z0-9-]+--pedidos-novo-drhair\.netlify\.app$/, /^https:\/\/operacoes-drhair\.pages\.dev$/, /^https:\/\/[a-z0-9-]+\.operacoes-drhair\.pages\.dev$/, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const jwtAal = (t: string) => { try { const p = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return String(JSON.parse(atob(p + "===".slice((p.length + 3) % 4))).aal || "aal1"); } catch { return "aal1"; } };
 const txt = (v: unknown) => (v == null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));

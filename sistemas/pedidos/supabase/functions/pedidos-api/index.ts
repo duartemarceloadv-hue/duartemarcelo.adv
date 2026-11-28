@@ -1,5 +1,6 @@
 // =====================================================================
 // pedidos-api — API do Sistema de Pedidos Dr. Hair (novo), ambiente de teste
+// v10 (28/11/2026): origens do Cloudflare Pages (operacoes-drhair) no CORS; nada mais muda.
 // v9 (27/11/2026): criar pedido (novopedido.ts), fila Notas e PV (notas.ts), justificativa nas correções.
 // verify_jwt = true: só entra quem tem sessão do Supabase Auth.
 // Lê e grava na área pedidos_novo e no núcleo (cadastros comuns: nucleo.*), por ligação direta ao banco,
@@ -24,6 +25,8 @@ const MAX_ARQ = 10 * 1024 * 1024;
 const ORIGENS = [
   /^https:\/\/pedidos-novo-drhair\.netlify\.app$/,
   /^https:\/\/[a-z0-9-]+--pedidos-novo-drhair\.netlify\.app$/,
+  /^https:\/\/operacoes-drhair\.pages\.dev$/,
+  /^https:\/\/[a-z0-9-]+\.operacoes-drhair\.pages\.dev$/,
   /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
 ];
 // ordem para escolher o papel principal de quem tem mais de um
