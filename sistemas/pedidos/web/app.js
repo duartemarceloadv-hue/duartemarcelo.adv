@@ -277,11 +277,11 @@ function etapaTxt(e){e=String(e||'').toLowerCase();return e.charAt(0).toUpperCas
 var SIT_CURTA={E:'No laboratório',L:'Confirmado pelo lab.',C:'A caminho',R:'Recebido',X:'Cancelado',D:'Rascunho'};
 function telaPedidos(d){
   var comUn=!estado.unidade;
-  var h=titulo('Pedidos',podeCriar()?'<button type="button" class="btn pri" id="novo">Novo pedido</button>':'',
+  var h=titulo('Pedidos',podeCriar()?'<button type="button" class="botao sec" id="rastreio-rel">Rastreio da Quality</button><button type="button" class="btn pri" id="novo">Novo pedido</button>':'',
     d?plural(d.qtd,'pedido','pedidos')+' · total '+R(d.total)+(escopoTxt()?' · '+escopoTxt():''):'');
   if(estado.especial) h+='<div class="filtros"><span class="fraco">Vindo do Início:</span><button type="button" class="botao sec mini" data-f="esp" data-v="">'+esc(FILTRO_NOME[estado.especial])+' — tirar filtro</button></div>';
   h+='<div class="filtros">'+
-   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH, nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">','c-busca')+
+   campo('Buscar','<input class="busca" id="busca" type="search" placeholder="Nº DH (atual ou anterior), nº do laboratório, unidade ou rastreio" value="'+esc(estado.busca)+'">','c-busca')+
    campo('Laboratório','<select class="sel" data-pf="lab">'+opt('','Todos',estado.lab)+opt('CP','Centro Paulista',estado.lab)+opt('INJ','Injemed',estado.lab)+'</select>')+
    campo('Situação','<select class="sel" data-pf="sit">'+opt('','Todas',estado.sit)+opt('E','No laboratório',estado.sit)+opt('L','Confirmado pelo lab.',estado.sit)+opt('C','A caminho',estado.sit)+opt('R','Recebidos',estado.sit)+opt('X','Cancelados',estado.sit)+opt('D','Rascunhos',estado.sit)+'</select>')+
    campo('Etapa no laboratório','<select class="sel" data-pf="pEtapa">'+opt('','Todas',estado.pEtapa)+opt('sem','Sem etapa informada',estado.pEtapa)+((d&&d.etapas)||(estado.pEtapa&&estado.pEtapa!=='sem'?[estado.pEtapa]:[])).map(function(e){return opt(e,etapaTxt(e),estado.pEtapa)}).join('')+'</select>')+
@@ -364,7 +364,7 @@ function telaPagamentos(d){
     if(estado.gForma&&x.forma!==estado.gForma) return false;
     if(estado.gDe&&x.venc<estado.gDe) return false;
     if(estado.gAte&&x.venc>estado.gAte) return false;
-    if(bq&&(x.num+' '+(x.numLab||'')+' '+x.un).toLowerCase().indexOf(bq)<0) return false;
+    if(bq&&(x.num+' '+(x.ant||'')+' '+(x.numLab||'')+' '+x.un).toLowerCase().indexOf(bq)<0) return false;
     if(!filtraBaixa(estado.gOmie,x.bOmie,x.exOmie)||!filtraBaixa(estado.gPlan,x.bPlan,x.exPlan)) return false;
     if(estado.gSis&&(estado.gSis==='falta'?x.nossa:(!x.nossa||(estado.gSis==='comp')!==comComp(x)))) return false;
     return true});
@@ -457,7 +457,7 @@ function ficha(d,hist){
   var h='<nav class="migalha" aria-label="Caminho"><button type="button" data-ir="'+esc(estado.voltar)+'">'+esc(({pagamentos:'Pagamentos',inicio:'Início',notas:'Notas e PV',receitas:'Receitas do mês'})[estado.voltar]||'Pedidos')+'</button><span aria-hidden="true">›</span><span>Ficha do pedido</span></nav>';
   var acs=(ed?'<button type="button" class="btn" id="ed-pedido">Editar dados</button><button type="button" class="btn perigo" id="canc-pedido">Cancelar pedido</button>':'')+(canc&&d.pode_admin?'<button type="button" class="btn" id="reabrir-pedido">Reabrir pedido</button>':'');
   h+='<section class="fcab"><div class="l1"><h1>'+esc(p.num)+'</h1>'+tag(SIT_P[p.sit]||SIT_P.E)+(p.teste?tag(['Teste — não enviado ao laboratório','a']):'')+(p.tipo?'<span class="selo n">'+(p.tipo==='mae'?'Pedido mãe':'Remessa de pedido mãe')+'</span>':'')+(acs?'<div class="ac">'+acs+'</div>':'')+'</div>'+
-    '<dl class="kv">'+kvi('Unidade',esc(p.un))+kvi('Laboratório',esc(lab.nomeLongo||lab.nome))+kvi(lab.numNome||'Nº no laboratório',esc(p.numLab||'—'))+kvi('Valor total',p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total),'valor')+
+    '<dl class="kv">'+kvi('Unidade',esc(p.un))+(p.ant?kvi('Nº anterior',esc(p.ant)):'')+kvi('Laboratório',esc(lab.nomeLongo||lab.nome))+kvi(lab.numNome||'Nº no laboratório',esc(p.numLab||'—'))+kvi('Valor total',p.sub===0&&!canc?'<span class="fraco">sem itens</span>':R(p.total),'valor')+
       (p.receita?kvi('Receita do mês','<button type="button" class="link" data-rec="'+esc(p.receita.id)+'">'+esc(nomeMesR(p.receita.mes))+'</button>')+kvi('Quem assinou a receita',esc(p.receita.prescritor||'—')):'')+'</dl>'+
     (rasc&&pode?'<div class="alerta">Este pedido ainda é rascunho: não foi enviado ao laboratório. <button type="button" class="link" data-rasc-ab="'+esc(p.id)+'">Continuar o rascunho</button></div>':'')+
     (canc?'<div class="cancelado"><b>Cancelado:</b> '+esc(p.cancMot||'motivo não informado')+'</div>':'')+
@@ -544,7 +544,7 @@ function ficha(d,hist){
       if(pdf) arqs.push(pdf.abre?'<button type="button" class="link" data-abrir="'+esc(pdf.id)+'">DANFE</button>':'DANFE <span class="fraco">(no sistema antigo)</span>'), usados[pdf.id]=1;
       if(xml) arqs.push(xml.abre?'<button type="button" class="link" data-abrir="'+esc(xml.id)+'">XML</button>':'XML <span class="fraco">(no sistema antigo)</span>'), usados[xml.id]=1;
       if(lk) arqs.push('<a class="link" href="'+esc(lk)+'" target="_blank" rel="noopener noreferrer">Portal Omie</a>');
-      return '<tr><td class="c1"><b>NF '+esc(n.num)+'</b>'+(n.canc?' '+tag(['Cancelada','n']):'')+'</td><td class="cl num"><span class="rot-m">Emissão </span>'+ver(n.emis)+'</td><td class="cl"><span class="rot-m">Omie </span>'+esc(n.sit_omie||'—')+'</td><td class="cl r num"><span class="rot-m">Frete </span>'+R(n.frete)+'</td><td class="c2 r num">'+R(n.total)+'</td><td class="cl">'+(arqs.join(' · ')||'<span class="fraco">—</span>')+'</td></tr>'}).join('')+'</tbody></table></div>';
+      return '<tr><td class="c1"><b>NF '+esc(n.num)+'</b>'+(n.canc?' '+tag(['Cancelada','n']):'')+'</td><td class="cl num"><span class="rot-m">Emissão </span>'+ver(n.emis)+'</td><td class="cl"><span class="rot-m">Omie </span>'+esc(n.sit_omie||'—')+'</td><td class="cl r num"><span class="rot-m">Frete </span>'+R(n.frete)+'</td><td class="c2 r num">'+R(n.total)+'</td><td class="cl">'+(arqs.join(' · ')||'<span class="fraco">—</span>')+(ed?' <button type="button" class="link" data-nf-desligar="'+esc(n.num)+'">desligar</button>':'')+'</td></tr>'}).join('')+'</tbody></table></div>';
   } else sNf+='<div class="cp"><span class="fraco">Nenhuma nota fiscal ligada a este pedido.</span></div>';
   var nfSoltas=arqPor(['nota_fiscal','xml_nf']);
   if(nfSoltas.length) sNf+='<div class="sub-t">Arquivos de nota sem número ligado</div><ul class="arqs">'+nfSoltas.map(arqLi).join('')+'</ul>';
@@ -601,7 +601,7 @@ function ficha(d,hist){
   h+=secao('sec-itens','Itens',plural(p.itens.length,'produto','produtos'),ed?'<button type="button" class="botao mini sec" id="ed-itens">'+(p.itens.length?'Editar itens':'Completar itens')+'</button>':'',sItens);
   h+=secao('sec-entrega','Entrega','',podeReceber?'<button type="button" class="botao mini" id="b-receber">Confirmar recebimento</button>':'',sEnt);
   h+=secao('sec-pag','Pagamento',R(p.parc.filter(function(x){return x.sit!=='X'}).reduce(function(t,x){return t+x.valor},0))+' cobrados'+(lab.cond&&lab.cond!=='—'?' · condição padrão: '+esc(lab.cond):''),acPag,sPag);
-  h+=secao('sec-nf','Notas fiscais',plural(p.nf.length,'nota','notas'),'',sNf);
+  h+=secao('sec-nf','Notas fiscais',plural(p.nf.length,'nota','notas'),ed?'<button type="button" class="botao mini sec" id="nf-ligar">Ligar NF</button>':'',sNf);
   h+=secao('sec-anexos','Outros anexos',plural(outros.length,'arquivo','arquivos'),'',sOut);
   if(sAnt) h+=secao('sec-antigo','Do sistema antigo','nº '+esc(H.id)+' · somente leitura','',sAnt);
   h+=secao('sec-hist','Histórico',plural(ev.length,'registro','registros'),'',sHist);
@@ -659,6 +659,43 @@ function abrirDlg(titulo,corpo){
 }
 function fecharDlg(){var d=$('#dlg');if(!d.classList.contains('on'))return;d.classList.remove('on');$('#dlg-fundo').classList.remove('on');d.innerHTML='';if(dlgFoco&&dlgFoco.focus&&document.contains(dlgFoco))dlgFoco.focus({preventScroll:true})}
 function ajustaTextos(){document.querySelectorAll('.txt-cob').forEach(function(t){t.style.height='auto';t.style.height=(t.scrollHeight+4)+'px'})}
+
+/* ---------- NF do pedido (campo "NF" do antigo): ligar ou desligar pelo número ---------- */
+function abrirNfPedido(acao,num){
+  var p=fichaAtual.pedido, lig=acao==='ligar';
+  abrirDlg((lig?'Ligar nota fiscal ao pedido ':'Desligar a NF '+num+' do pedido ')+p.num,'<form id="f-nfped"><div class="dlg-corpo">'+
+    (lig?'<p class="nota">Use quando a nota não chegou pela Omie ou ficou ligada ao pedido errado. Uma mesma NF pode valer para vários pedidos.</p>'+campoD('Número da NF','<input class="ent" id="nf-num" inputmode="numeric" maxlength="12" autocomplete="off">')
+        :'<p class="nota">A nota continua no sistema; só deixa de valer para este pedido. A conferência pedido × NF é refeita.</p>')+
+    campoD('Justificativa','<textarea class="ent txt-cob" id="nf-just" maxlength="500" rows="2"></textarea>','obrigatória')+
+    rodapeDlg(lig?'Ligar NF':'Desligar NF'));
+  nfPedidoAtual={acao:acao,num:num};
+}
+var nfPedidoAtual=null;
+function enviarNfPedido(e){e.preventDefault();var x=nfPedidoAtual,lig=x.acao==='ligar';
+  gravarDlg('f-nfped','nf_pedido',{pedido_id:fichaAtual.pedido.id,acao:x.acao,numero:lig?$('#nf-num').value:x.num,justificativa:$('#nf-just').value},lig?'NF ligada.':'NF desligada.')}
+/* ---------- rastreio da Quality: relatório do robô diário e "rastreio completo" ---------- */
+function dataHora(t){if(!t)return '—';var d=new Date(t);return isNaN(d)?esc(t):d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+function blocoRastreio(nome,x){
+  if(!x) return '<h3>'+esc(nome)+'</h3><p class="fraco">Ainda não rodou.</p>';
+  var st={ok:'concluído',parcial:'concluído com erros',erro:'falhou',rodando:'rodando'}[x.status]||x.status;
+  var h='<h3>'+esc(nome)+'</h3><p>'+dataHora(x.inicio)+' · '+esc(x.fim?st:'rodando')+' · '+plural(x.lidos||0,'pedido consultado','pedidos consultados')+' · '+plural(x.aplicados||0,'alteração','alterações')+'</p>';
+  var li=function(t,l){return l&&l.length?'<p class="fraco">'+esc(t)+'</p><ul class="lista-rel">'+l.map(function(m){return '<li>'+esc(m)+'</li>'}).join('')+'</ul>':''};
+  return h+li('Avisos',x.alertas)+li('Alterações gravadas',x.mudancas)+li('Erros',x.erros);
+}
+async function abrirRastreio(){
+  abrirDlg('Rastreio da Quality','<div class="dlg-corpo"><p class="fraco">Carregando…</p></div>');
+  try{
+    var d=await api('rastreio_relatorio');
+    abrirDlg('Rastreio da Quality','<div class="dlg-corpo"><p class="nota">O robô diário consulta os pedidos do Centro Paulista ainda não recebidos. O rastreio completo reconsulta todos os pedidos com NF, inclusive os entregues, e não apaga datas já lançadas; se faltar algum, rode de novo que ele continua de onde parou.</p>'+
+      blocoRastreio('Robô diário',d.diario)+blocoRastreio('Rastreio completo',d.completo)+'<div id="dlg-erro"></div></div>'+
+      '<div class="dlg-pe"><button type="button" class="botao sec" id="dlg-cancela">Fechar</button><button type="button" class="botao" id="rastreio-rodar">Rodar rastreio completo</button></div>');
+  }catch(x){abrirDlg('Rastreio da Quality','<div class="dlg-corpo"><div class="erro">'+esc(x.message)+'</div></div>')}
+}
+async function rodarRastreioCompleto(b){
+  b.disabled=true;b.textContent='Iniciando…';
+  try{var r=await api('rastreio_completo');fecharDlg();avisar(r.mensagem)}
+  catch(x){b.disabled=false;b.textContent='Rodar rastreio completo';erroDlg(x)}
+}
 
 /* ---------- edição ---------- */
 function campoD(rot,html,dica){return '<label class="campo"><span>'+esc(rot)+(dica?' <small>('+esc(dica)+')</small>':'')+'</span>'+html+'</label>'}
@@ -934,6 +971,10 @@ document.addEventListener('click',function(e){
   if(b.id==='anexar-sel'){var sl=selecionadas();abrirAnexar(sl,sl.map(function(x){return x.id}),'Parcelas marcadas na tela Pagamentos.');return}
   if(b.id==='limpar-sel'){estado.sel={};render();return}
   if(b.id==='novo'){if(window.DH.novoPedido)window.DH.novoPedido();return}
+  if(b.id==='rastreio-rel'){abrirRastreio();return}
+  if(b.id==='nf-ligar'){abrirNfPedido('ligar','');return}
+  if(b.dataset.nfDesligar){abrirNfPedido('desligar',b.dataset.nfDesligar);return}
+  if(b.id==='rastreio-rodar'){rodarRastreioCompleto(b);return}
   if(b.dataset.rascAb){window.DH.abrirRascunho(b.dataset.rascAb);return}
   if(b.dataset.card){var c=b.dataset.card.split(':');
     if(c[0]==='pedidos'&&c[1]==='D'){limpaFiltrosPed();estado.sit='D';ir('pedidos')}
@@ -959,7 +1000,7 @@ document.addEventListener('submit',function(e){
   var id=e.target.id;
   if(id==='f-login')entrar(e); else if(id==='f-senha')salvarSenha(e); else if(id==='f-mfa')confirmarMfa(e);
   else if(MOD.envios.some(function(f){return f(e)})){}
-  else if(id==='f-receber')enviarReceber(e); else if(id==='f-baixa')enviarBaixa(e); else if(id==='f-edped')enviarEditarPedido(e); else if(id==='f-canc')enviarCancelar(e); else if(id==='f-parc')enviarParcela(e); else if(id==='f-itens')enviarItens(e); else if(id==='f-anexo')enviarAnexo(e);
+  else if(id==='f-receber')enviarReceber(e); else if(id==='f-baixa')enviarBaixa(e); else if(id==='f-edped')enviarEditarPedido(e); else if(id==='f-nfped')enviarNfPedido(e); else if(id==='f-canc')enviarCancelar(e); else if(id==='f-parc')enviarParcela(e); else if(id==='f-itens')enviarItens(e); else if(id==='f-anexo')enviarAnexo(e);
 });
 var tBuscaG;
 document.addEventListener('input',function(e){

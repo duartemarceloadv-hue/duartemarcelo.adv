@@ -2,7 +2,7 @@
 // conectores — robôs do Sistema de Pedidos Dr. Hair (novo)
 // Chamado 1x/dia pelo pg_cron (pedidos_novo.chamar_conector) com o cabeçalho x-cron.
 // A chave fica no Vault; aqui só existe o SHA-256 dela.
-// acao: "planilha" (planilha do Centro Paulista) | "rastreio" (Quality). simular: true = não grava.
+// acao: "planilha" (planilha do Centro Paulista) | "rastreio" (Quality, diário) | "rastreio_completo" (manual). simular: true = não grava.
 // Regras iguais às do sistema atual (automacoes), com registro de execução e de alterações.
 // =====================================================================
 import postgres from "npm:postgres@3.4.4";
@@ -182,18 +182,45 @@ async function consultaQuality(nf: string, cnpj: string, base: string | null, ho
   const entrada = passo("entrada transportadora"), rota = passo("rota entrega"), entrega = passo("entrega destino");
   return { achou: !!(entrada || rota || entrega), entrada, rota, entrega } as const;
 }
-async function rastreio(c: Ctx) {
-  const POR = "robo-rastreio-quality";
+// "Seguiu junto" (regra do antigo): NF não encontrada na Quality, com frete zero, mesma emissão e mesma unidade
+// de outra NF já entregue = foi na mesma caixa; vale a entrega da outra.
+async function seguiuJunto(x: any, unidadeId: string, res: any[]) {
+  if (!x.emissao || Number(x.frete || 0) !== 0) return null;
+  // empate: vale a NF de número mais próximo (notas da mesma caixa saem em sequência) e, entre duas, a seguinte, como no antigo
+  const dist = (n: string) => Math.abs((+n || 0) - (+x.nf || 0));
+  const mesma = res.filter((q) => q.nf !== x.nf && q.entrega && q.emissao === x.emissao).sort((a, b) => dist(a.nf) - dist(b.nf) || (+b.nf || 0) - (+a.nf || 0))[0];
+  if (mesma) return { nf: mesma.nf, entrega: mesma.entrega };
+  // entrega da própria NF (rastreio anterior); sem ela, a data de recebimento do pedido dela
+  const [o] = await sql`select n2.numero nf,
+        coalesce((select e->>'entrega' from jsonb_array_elements(coalesce(p2.rastreio_detalhe->'nfs', '[]')) e where e->>'nf' = n2.numero and e->>'entrega' is not null limit 1),
+                 p2.recebido_em::text) entrega
+      from pedidos_novo.nota_fiscal n2
+      join pedidos_novo.nota_pedido np2 on np2.nota_id = n2.id join pedidos_novo.pedido p2 on p2.id = np2.pedido_id
+     where n2.id <> ${x.id} and not n2.cancelada and n2.emissao = ${x.emissao}::date and p2.unidade_id = ${unidadeId}
+       and p2.cancelado_em is null and p2.recebido_em is not null
+     order by abs(coalesce(nullif(regexp_replace(n2.numero, '\D', '', 'g'), '')::bigint, 0) - ${String(+x.nf || 0)}::bigint), n2.numero desc, p2.recebido_em limit 1`;
+  return o ? { nf: o.nf, entrega: o.entrega } : null;
+}
+// completo = false: robô diário, só pedidos do Centro Paulista não recebidos.
+// completo = true: "rastreio completo" (manual), reconsulta todos os pedidos com NF, inclusive entregues; nunca apaga
+// datas já lançadas. Trabalha por tempo (~110 s) começando pelos consultados há mais tempo; chamar de novo continua de onde parou.
+async function rastreio(c: Ctx, completo = false) {
+  const POR = completo ? "rastreio-completo-quality" : "robo-rastreio-quality";
   const HOJE = hojeBR();
-  const peds = await sql`select p.id, p.num_interno, p.enviado_em::text env, p.expedido_em::text exp, p.rastreio_situacao sit, u.nome un,
+  const fimEm = Date.now() + 110000;
+  const filtro = completo ? sql`true` : sql`p.recebido_em is null`;
+  const peds = await sql`select p.id, p.num_interno, p.unidade_id, p.enviado_em::text env, p.expedido_em::text exp, p.recebido_em::text rec,
+      p.rastreio_situacao sit, u.nome un,
       (select regexp_replace(c.cnpj,'\D','','g') from pedidos_novo.unidade_cnpj c where c.unidade_id = p.unidade_id and (c.ate is null or c.ate >= ${HOJE}::date) order by c.de desc limit 1) cnpj,
       (select e.etapa from pedidos_novo.etapa_lab e where e.pedido_id = p.id order by e.em desc, e.id desc limit 1) etapa,
-      (select json_agg(json_build_object('nf', n.numero, 'emissao', n.emissao)) from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id
+      (select json_agg(json_build_object('id', n.id, 'nf', n.numero, 'emissao', n.emissao, 'frete', n.frete)) from pedidos_novo.nota_pedido np join pedidos_novo.nota_fiscal n on n.id = np.nota_id
          where np.pedido_id = p.id and not n.cancelada) nfs
     from pedidos_novo.pedido p join pedidos_novo.unidade u on u.id = p.unidade_id
-    where p.cancelado_em is null and p.recebido_em is null and not p.rascunho and p.laboratorio_id = 'CP'`;
+    where p.cancelado_em is null and not p.rascunho and p.laboratorio_id = 'CP' and ${filtro}
+    order by p.rastreio_em nulls first, p.enviado_em`;
   let lidos = 0, aplicados = 0;
   const fila = peds.filter((p) => (p.nfs && p.nfs.length) || /\bRETIRA(DA|DO)?\b/i.test(p.etapa || ""));
+  const cont: Record<string, number> = {};
   const trabalha = async (p: any) => {
     lidos++;
     try {
@@ -205,12 +232,18 @@ async function rastreio(c: Ctx) {
         const res: any[] = [];
         for (const x of p.nfs) {
           const q = await consultaQuality(x.nf, p.cnpj, x.emissao || p.env || null, HOJE);
-          res.push({ nf: x.nf, confirmada: !!x.emissao, ...q });
+          res.push({ nf: x.nf, id: x.id, emissao: x.emissao, frete: x.frete, confirmada: !!x.emissao, ...q });
           await new Promise((ok) => setTimeout(ok, 300));
         }
-        const txt = (q: any) => !q.achou ? (q.confirmada ? "— NÃO RASTREADA (NF confirmada; outra transportadora, retirada ou junto com outro pedido)" : "✖ NÃO ENCONTRADA") : q.entrega ? "✔ ENTREGUE" : q.rota && q.rota < addD(HOJE, -3) ? "⚠ EM ROTA (sem baixa)" : "🚚 EM TRÂNSITO";
+        for (const q of res) {
+          if (q.achou) continue;
+          const j = await seguiuJunto(q, p.unidade_id, res);
+          if (j) { q.junto = j.nf; q.entrega = j.entrega; }
+        }
+        const txt = (q: any) => q.junto ? `✔ SEGUIU JUNTO com a NF ${q.junto}` : !q.achou ? (q.confirmada ? "— NÃO RASTREADA (NF confirmada; outra transportadora, retirada ou junto com outro pedido)" : "✖ NÃO ENCONTRADA") : q.entrega ? "✔ ENTREGUE" : q.rota && q.rota < addD(HOJE, -3) ? "⚠ EM ROTA (sem baixa)" : "🚚 EM TRÂNSITO";
+        for (const q of res) { const k = txt(q).replace(/ com a NF .*/, "").replace(/ \(.*/, ""); cont[k] = (cont[k] || 0) + 1; }
         sit = res.length === 1 ? txt(res[0]) : res.map((q) => `NF ${q.nf}: ${txt(q)}`).join(" / ");
-        det = { nfs: res };
+        det = { nfs: res.map(({ id: _i, frete: _f, ...q }) => q) };
         const entradas = res.map((q) => q.entrada).filter(Boolean).sort();
         expedido = entradas[0] || null;
         if (res.length && res.every((q) => q.entrega)) recebido = res.map((q) => q.entrega).sort().pop() || null;
@@ -218,7 +251,7 @@ async function rastreio(c: Ctx) {
       const mud: string[] = [];
       if (sit !== p.sit) mud.push(`rastreio: ${sit}`);
       if (expedido && !p.exp && expedido <= HOJE) mud.push(`saída (Quality): ${expedido}`); else expedido = null;
-      if (recebido && recebido <= HOJE) mud.push(`entregue em ${recebido}`); else recebido = null;
+      if (recebido && !p.rec && recebido <= HOJE) mud.push(`entregue em ${recebido}`); else recebido = null;
       if (!c.simular) {
         await comAuditoria(POR, async (tx) => {
           await tx`update pedidos_novo.pedido set rastreio_situacao = ${sit}, rastreio_em = now(), rastreio_detalhe = ${tx.json(det as any)} where id = ${p.id}`;
@@ -230,7 +263,11 @@ async function rastreio(c: Ctx) {
     } catch (e) { c.erros.push(`${p.num_interno}: ${(e as Error).message}`); }
   };
   const fila2 = [...fila];
-  await Promise.all([0, 1, 2].map(async () => { while (fila2.length) await trabalha(fila2.shift()); }));
+  await Promise.all([0, 1, 2].map(async () => { while (fila2.length && (!completo || Date.now() < fimEm)) await trabalha(fila2.shift()); }));
+  if (completo) {
+    c.alertas.unshift(`Rastreio completo: ${lidos} de ${fila.length} pedidos consultados` + (fila2.length ? `; faltam ${fila2.length} (rode de novo para continuar)` : "; todos consultados") +
+      ". NFs por situação: " + (Object.entries(cont).map(([k, v]) => `${k}: ${v}`).join("; ") || "nenhuma"));
+  }
   return { lidos, aplicados };
 }
 
@@ -241,7 +278,7 @@ Deno.serve(async (req) => {
   if (!(await autorizado(req))) return resp(401, { erro: "Não autorizado." });
   let b: any = {}; try { b = await req.json(); } catch { /* corpo vazio */ }
   const acao = String(b.acao || "");
-  const robos: Record<string, (c: Ctx) => Promise<{ lidos: number; aplicados: number }>> = { planilha, rastreio };
+  const robos: Record<string, (c: Ctx) => Promise<{ lidos: number; aplicados: number }>> = { planilha, rastreio: (c) => rastreio(c), rastreio_completo: (c) => rastreio(c, true) };
   const f = robos[acao];
   if (!f) return resp(400, { erro: "Ação desconhecida." });
   const c: Ctx = { simular: b.simular === true, mudancas: [], erros: [], alertas: [] };

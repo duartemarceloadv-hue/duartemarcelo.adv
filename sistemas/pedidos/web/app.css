@@ -363,3 +363,4 @@ tfoot td{font-weight:600;border-top:1px solid var(--line);border-bottom:0;backgr
 /* ---------- Novo pedido (rascunho) e Notas e PV ---------- */
 #np-dados .duas,#f-np .duas{row-gap:10px}
 .sub-t .nota{font-weight:400}
+.lista-rel{margin:4px 0 12px 18px;padding:0}.lista-rel li{margin:2px 0;overflow-wrap:anywhere}.dlg-corpo h3{font-size:15px;margin:14px 0 4px}

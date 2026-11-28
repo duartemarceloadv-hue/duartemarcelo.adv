@@ -174,7 +174,8 @@ async function carregar(c: Ctx, pedidoId?: string) {
       p.rastreio rast, p.recebido_em::text rec, p.recebido_por, p.recebido_obs rec_obs, p.frete::float8 frete,
       p.subtotal::float8 sub, p.total::float8 total, p.situacao, p.dias_atraso::int atraso, p.cancelado_motivo canc_mot,
       p.obs, p.legado_ref leg, p.tipo, p.origem, e.etapa, e.previsao::text etapa_prev,
-      (select x.teste from pedidos_novo.pedido x where x.id = p.id) teste
+      (select x.teste from pedidos_novo.pedido x where x.id = p.id) teste,
+      (select string_agg(x.anterior, ' ' order by x.em) from pedidos_novo.num_interno_anterior x where x.pedido_id = p.id) ant
     from pedidos_novo.v_pedido p
     join pedidos_novo.unidade u on u.id = p.unidade_id
     left join lateral (select etapa, previsao from pedidos_novo.etapa_lab x where x.pedido_id = p.id order by em desc, id desc limit 1) e on true
@@ -197,7 +198,7 @@ async function carregar(c: Ctx, pedidoId?: string) {
       id: a.id, num: a.num || "(rascunho)", numLab: a.num_lab, lab: a.lab, labNome: lab?.nome || a.lab, unidade_id: a.unidade_id, un: a.un,
       env: a.env, prev: a.prev, conf: a.conf, exp: a.exp, rast: a.rast, rec: a.rec, recPor: a.recebido_por, recObs: a.rec_obs,
       frete: a.frete, sub: a.sub, total: a.total, sit: SIT_P[a.situacao] || "E", atraso: a.atraso || 0, cancMot: a.canc_mot,
-      obs: a.obs, leg: a.leg, tipo: a.tipo === "normal" ? null : a.tipo, origem: a.origem, etapa: a.etapa, etapaPrev: a.etapa_prev, parc: [] as Parc[], teste: !!a.teste,
+      obs: a.obs, leg: a.leg, tipo: a.tipo === "normal" ? null : a.tipo, origem: a.origem, etapa: a.etapa, etapaPrev: a.etapa_prev, parc: [] as Parc[], teste: !!a.teste, ant: a.ant || null,
     };
     porId[o.id] = o;
     return o;
@@ -292,7 +293,7 @@ const linhaPedido = (p: Ped, nfs: Record<string, string[]>) => {
   const ativas = p.parc.filter((x: Parc) => x.sit !== "X");
   const abertas = ativas.filter((x: Parc) => x.livre > 0 && x.sit !== "B").sort((a: Parc, b: Parc) => (a.venc < b.venc ? -1 : 1));
   return {
-    id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id,
+    id: p.id, num: p.num, ant: p.ant, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id,
     env: p.env, prazo: p.prazo, exp: p.exp, rec: p.rec, rast: p.rast, etapa: p.etapa, sit: p.sit,
     sub: p.sub, frete: p.frete, total: p.total, atraso: p.atraso, diasCaminho: p.diasCaminho, acoes: p.acoes, teste: p.teste,
     parc: {
@@ -316,6 +317,23 @@ const ORDEM: Record<string, (x: Ped, y: Ped) => number> = {
   atraso: (x, y) => y.atraso - x.atraso || y.diasCaminho - x.diasCaminho,
   unidade: (x, y) => x.un.localeCompare(y.un, "pt-BR") || ((y.env || "") > (x.env || "") ? 1 : -1),
 };
+// rastreio da Quality: último resultado do robô diário e do "rastreio completo"; o completo é disparado aqui e roda no servidor
+async function aRastreioRelatorio(c: Ctx) {
+  exigeEscrita(c);
+  const l = await sql`select distinct on (conector) conector, inicio::text inicio, fim::text fim, status, lidos, aplicados, erros, resumo
+      from pedidos_novo.execucao_conector where conector in ('rastreio', 'rastreio_completo') order by conector, inicio desc`;
+  const o: Record<string, any> = {};
+  for (const x of l) o[x.conector] = { inicio: x.inicio, fim: x.fim, status: x.status, lidos: x.lidos, aplicados: x.aplicados,
+    erros: (x.erros || []).slice(0, 30), mudancas: (x.resumo?.mudancas || []).slice(0, 200), alertas: (x.resumo?.alertas || []).slice(0, 60) };
+  return { diario: o.rastreio || null, completo: o.rastreio_completo || null };
+}
+async function aRastreioCompleto(c: Ctx) {
+  exigeEscrita(c);
+  const [r] = await sql`select count(*)::int n from pedidos_novo.execucao_conector where conector = 'rastreio_completo' and fim is null and inicio > now() - interval '5 minutes'`;
+  if (r.n) throw new Erro(409, "O rastreio completo já está rodando. Aguarde uns 2 minutos e abra o relatório de novo.");
+  await sql`select pedidos_novo.chamar_conector('rastreio_completo')`;
+  return { mensagem: "Rastreio completo iniciado. Leva uns 2 minutos; depois abra o relatório." };
+}
 async function aPedidos(c: Ctx, b: any) {
   const { HOJE, PED } = await carregar(c);
   const busca = String(b.busca || "").trim().toLowerCase().slice(0, 80);
@@ -356,7 +374,7 @@ async function aPedidos(c: Ctx, b: any) {
       if (pag === "sem" && p.parc.length) return false;
     }
     if (b.so_acao && !p.acoes.length) return false;
-    if (busca && (p.num + " " + (p.numLab || "") + " " + p.un + " " + (p.rast || "")).toLowerCase().indexOf(busca) < 0) return false;
+    if (busca && (p.num + " " + (p.ant || "") + " " + (p.numLab || "") + " " + p.un + " " + (p.rast || "")).toLowerCase().indexOf(busca) < 0) return false;
     return true;
   }).sort(ordem);
   const ini = Math.max(0, Math.floor(+b.inicio || 0));
@@ -441,7 +459,7 @@ async function aPagamentos(c: Ctx, b: any) {
   PARC.forEach((x) => (uns[porId[x.pedido_id].unidade_id] = porId[x.pedido_id].un));
   const lista = PARC.filter((x) => !un || porId[x.pedido_id].unidade_id === un).map((x) => {
     const p = porId[x.pedido_id];
-    return { id: x.id, pedido_id: p.id, num: p.num, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id, n: x.n, de: x.de, venc: x.venc, valor: x.valor, forma: x.forma, sit: x.sit, prox7: x.prox7, livre: x.livre, pago: x.pago, pagoEm: x.pagoEm, bPlan: x.bPlan, bOmie: x.bOmie, bSis: x.bSis, nossa: x.nossa, exOmie: x.exOmie, exPlan: x.exPlan, atrasoDias: x.sit === "V" ? dias(x.venc, HOJE) : 0 };
+    return { id: x.id, pedido_id: p.id, num: p.num, ant: p.ant, numLab: p.numLab, lab: p.lab, labNome: p.labNome, un: p.un, unidade_id: p.unidade_id, n: x.n, de: x.de, venc: x.venc, valor: x.valor, forma: x.forma, sit: x.sit, prox7: x.prox7, livre: x.livre, pago: x.pago, pagoEm: x.pagoEm, bPlan: x.bPlan, bOmie: x.bOmie, bSis: x.bSis, nossa: x.nossa, exOmie: x.exOmie, exPlan: x.exPlan, atrasoDias: x.sit === "V" ? dias(x.venc, HOJE) : 0 };
   });
   return {
     hoje: HOJE, h7,
@@ -645,6 +663,36 @@ async function travaPedido(tx: postgres.TransactionSql, c: Ctx, id: string) {
     from pedidos_novo.pedido p where p.id = ${id} and ${filtroUn(c, "p.unidade_id")} for update`;
   if (!p) throw new Erro(404, "Pedido não encontrado (ou fora das suas unidades).", "nao_encontrado");
   return p;
+}
+// campo "NF" do pedido (como no antigo): liga ou desliga uma nota pelo número, com justificativa e registro.
+// Uma NF pode valer para vários pedidos. Se a nota ainda não existe no sistema, nasce só com o número
+// (a integração da Omie completa emissão, valores e arquivos quando ela chegar).
+async function aNfPedido(c: Ctx, b: any) {
+  exigeEscrita(c);
+  const id = uuid(b.pedido_id);
+  const acao = String(b.acao || "");
+  if (acao !== "ligar" && acao !== "desligar") throw new Erro(400, "Ação inválida.");
+  const numero = String(b.numero ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  if (numero.length < 3 || numero.length > 9) throw new Erro(400, "Informe o número da nota fiscal (só números).");
+  const just = exigeJust(b.justificativa);
+  return await comAuditoria(c, async (tx) => {
+    const p = await travaPedido(tx, c, id);
+    if (p.cancelado_em) throw new Erro(409, "Pedido cancelado não pode ser alterado. Reabra o pedido antes.");
+    if (p.rascunho) throw new Erro(409, "Este pedido ainda é rascunho.");
+    let [n] = await tx`select id, cancelada from pedidos_novo.nota_fiscal where laboratorio_id = ${p.laboratorio_id} and numero = ${numero}`;
+    if (acao === "ligar") {
+      if (n?.cancelada) throw new Erro(409, `A NF ${numero} está cancelada e não pode ser ligada.`);
+      if (!n) [n] = await tx`insert into pedidos_novo.nota_fiscal (laboratorio_id, numero, origem) values (${p.laboratorio_id}, ${numero}, 'manual') returning id`;
+      const r = await tx`insert into pedidos_novo.nota_pedido (nota_id, pedido_id) values (${n.id}, ${id}) on conflict do nothing returning nota_id`;
+      if (!r.length) return { ok: true, mensagem: `A NF ${numero} já estava ligada a este pedido.` };
+      await recalcula(tx, id);
+      return { ok: true, mensagem: `NF ${numero} ligada ao pedido ${p.num_interno}.` };
+    }
+    const r = n ? await tx`delete from pedidos_novo.nota_pedido where nota_id = ${n.id} and pedido_id = ${id} returning nota_id` : [];
+    if (!r.length) throw new Erro(404, `A NF ${numero} não está ligada a este pedido.`);
+    await recalcula(tx, id);
+    return { ok: true, mensagem: `NF ${numero} desligada do pedido ${p.num_interno}.` };
+  }, just);
 }
 async function aEditarPedido(c: Ctx, b: any) {
   exigeEscrita(c);
@@ -914,7 +962,7 @@ Deno.serve(async (req) => {
       confirmar_recebimento: aConfirmarRecebimento, anexar_comprovante: aAnexarComprovante,
       cobranca_baixa: aCobrancaBaixa, abrir_arquivo: aAbrirArquivo, baixar_sem_comprovante: aBaixarSemComprovante,
       editar_pedido: aEditarPedido, cancelar_pedido: aCancelarPedido, reabrir_pedido: aReabrirPedido,
-      salvar_parcela: aSalvarParcela, cancelar_parcela: aCancelarParcela, produtos: aProdutos, salvar_itens: aSalvarItens,
+      nf_pedido: aNfPedido, rastreio_relatorio: aRastreioRelatorio, rastreio_completo: aRastreioCompleto, salvar_parcela: aSalvarParcela, cancelar_parcela: aCancelarParcela, produtos: aProdutos, salvar_itens: aSalvarItens,
       ...acoesCadastros(DEP), ...acoesReceitas(DEP), ...acoesNovoPedido(DEP), ...acoesNotas(DEP),
     };
     const f = acoes[acao];

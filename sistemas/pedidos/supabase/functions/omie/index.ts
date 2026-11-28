@@ -16,7 +16,8 @@ const KEY_SHAS = ["46f731075340507a557da021cecd4cf5e45bf3147424f78b84e67708be6b5
 const POR = "integracao-omie";
 const LAB = "CP";
 const BUCKET = "pedidos-novo";
-const CC: Record<string, string> = { "70511": "125076", "67890": "120414" }; // cartas de correção (nº do pedido corrigido)
+// cartas de correção (NF -> nº do pedido no laboratório corrigido): ficha do laboratório, lida a cada chamada
+let CC: Record<string, string> = {};
 const SIT: Record<string, string> = { "1": "aberto", "2": "pago", "3": "atrasado", "4": "cancelado", "5": "sem cobrança" };
 const PROD: [RegExp, string][] = [[/bFGF|IGF|VEGF|Copper/i, "fator"], [/Dutasterida/i, "dutasterida"], [/Minoxidil\s*2\s*%/i, "minox-2"], [/Minoxidil\s*0,5/i, "minox-05"], [/Pill\s*Food/i, "pillfood"], [/Complexo\s*Vitam/i, "complexo"], [/Lidoca/i, "lidocaina"], [/Luteolina/i, "luteolina"], [/Cafeisilane/i, "cafeisilane"], [/Cloreto/i, "cloreto"], [/Cafe[ií]na/i, "cafeina"], [/Tacrolimus/i, "tacrolimus"], [/Triancinolona/i, "triancinolona"]];
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-omie, content-type, apikey", "Access-Control-Allow-Methods": "POST, OPTIONS" };
@@ -206,6 +207,9 @@ Deno.serve(async (req) => {
   if (!(await autorizado(req))) return J({ erro: "não autorizado" }, 403);
   const b = await req.json().catch(() => ({}));
   SIMULAR = b.simular === true;
+  const [fl] = await sql`select coalesce(ficha->'cartas_correcao', '{}'::jsonb) cc from pedidos_novo.laboratorio where id = ${LAB}`;
+  CC = {};
+  for (const [k, v] of Object.entries(fl?.cc || {})) CC[nfNum(k)] = dig(v);
   if (SIMULAR && Array.isArray(b.anexar) && b.anexar.length) return J({ erro: "simulação não aceita anexos" }, 400);
   const docs = (b.docs || []).filter((d: any) => d?.type === "nfe" && d?.data?.numero_nota);
   const res: R = { recebidos: docs.length, notas: 0, ligadas: [], criados: [], semPedido: [], canceladas: [], parcelas: 0, baixas: 0, novas: [], anexados: [], erros: [] };

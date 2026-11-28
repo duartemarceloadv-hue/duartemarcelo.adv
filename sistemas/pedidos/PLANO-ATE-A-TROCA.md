@@ -3,12 +3,12 @@
 Detalhe item a item: `aceite-troca.md`. Decisões: `../sistema-unico/decisoes-do-dono.md`.
 
 ## Eu faço (não depende do dono)
-1. Publicar a `pedidos-api` com o endereço do Cloudflare liberado (já pronta no repositório).
+1. Publicar a `pedidos-api` (inclui o endereço do Cloudflare já liberado, para quando ligar). Cloudflare adiado: segue no Netlify até a organização da Operações no GitHub.
 2. Cópia de segurança diária (D2): dados e arquivos de Documentos, POPs, Premiação, Nutra e Pedidos, só leitura, para o Drive de Operações.
-3. Busca do pedido também pelo número anterior.
-4. Rastreio "seguiu junto" e "rastreio completo".
-5. Ligação NF → pedido pelo campo NF e pelo nome do anexo; tirar as 2 cartas de correção fixas do código.
-6. Conferir o ano deduzido no rastreio da Quality com caso real.
+3. ~~Busca do pedido também pelo número anterior.~~ Pronto (28/11).
+4. ~~Rastreio "seguiu junto" e "rastreio completo".~~ Pronto (28/11).
+5. ~~Ligação NF → pedido pelo campo NF e pelo nome do anexo; tirar as 2 cartas de correção fixas do código.~~ Pronto (28/11).
+6. ~~Conferir o ano deduzido no rastreio da Quality com caso real.~~ Conferido (28/11): 312 de 312.
 7. Tela de gestão de usuários (papéis dos 21 do antigo).
 8. Teste de restauração do banco num projeto à parte (projeto de teste grátis, apagado depois).
 9. Guia curto por papel (Operações, financeiro, unidade, sócio).

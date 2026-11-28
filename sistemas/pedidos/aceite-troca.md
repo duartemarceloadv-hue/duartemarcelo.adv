@@ -19,10 +19,10 @@ Legenda: **pronto** = feito e conferido no sistema novo · **falta** = trabalho 
 | A8 | Preço conferido com a tabela vigente na data de emissão da NF | pronto | `conferir_pedido_nf` (0016); reproduz as 58 divergentes do antigo |
 | A9 | Bonificação (CFOP 5910/6910) soma quantidade, não valor | pronto | `conferir_pedido_nf` |
 | A10 | NF cancelada cancela só as parcelas sem pagamento | pronto | função `omie` |
-| A11 | Ligação NF → pedido: carta de correção, xPed, número, nome do anexo | falta (parcial) | carta de correção, mapa, xPed e nº do pedido: prontos. As 2 cartas de correção ainda estão fixas no código (o desenho pede a ficha do laboratório). A ligação pelo campo "NF" do pedido e pelo nome do anexo não existe no novo |
+| A11 | Ligação NF → pedido: carta de correção, xPed, número, nome do anexo | pronto | carta de correção, mapa, xPed e nº do pedido: prontos. As cartas de correção saíram do código e estão na ficha do laboratório (0018). Campo "NF" do antigo: as 364 ligações do antigo conferem no novo (0 faltando, 28/11); para as próximas, botão "Ligar NF"/"desligar" na ficha do pedido, com justificativa e histórico. Nome do anexo: os 846 anexos com nº de NF no nome já estão ligados; no novo a unidade só anexa comprovante, e os anexos da Omie já vêm com o nº da NF |
 | A12 | Prazo de 30 dias só marca atraso | pronto | `prazo_envio_dias` |
 | A13 | Retirada em Sorocaba conta como entregue | pronto | robô `rastreio` |
-| A14 | Quality sem ano: ano deduzido pela emissão | falta (conferir) | o README do robô diz "ano inferido"; falta teste com um caso real |
+| A14 | Quality sem ano: ano deduzido pela emissão | pronto | conferido no rastreio completo de 28/11: 312 pedidos entregues, ano certo em todos (inclusive 2025); 310 com a mesma data do recebimento registrado; 2 diferentes explicados (DH-2026-0036: "seguiu junto" usava a data do pedido da outra NF, corrigido; DH-2026-0223: segunda NF entregue depois, recebimento mantido) |
 | A15 | Campo "crédito" do pedido de venda | pronto (regra) | `divergencias_pv` trata o crédito; o PV continua sendo lido fora do sistema (D5) |
 | A16 | Receita pela média de N meses (N = 3) | pronto | `gerar_receitas_mes`; 33 de 51 iguais ao antigo, as 18 diferenças explicadas |
 | A17 | Arredondar para cima em múltiplos de 50 | pronto | idem |
@@ -40,7 +40,7 @@ Legenda: **pronto** = feito e conferido no sistema novo · **falta** = trabalho 
 | B4 | Pedido de venda e conferência pedido × NF recalculada | pronto | 63 divergências de PV + 60 de NF na fila Notas e PV |
 | B5 | **Arquivos do antigo** (1.326 anexos / 188,8 MB + 24 Injemed / 9,2 MB; bucket `backups` fica fora) | depende do dono | o dono está decidindo se os arquivos ficam onde estão. Se for copiar: cabe no plano grátis (arquivos do projeto novo 409,7 MB + 198 MB ≈ 608 MB de 1 GB; banco 173 MB, limite à parte). Falta a chave do projeto antigo para ler os arquivos (buckets privados) |
 | B6 | Omie: tarefa "Sincronizar Portal Omie" enviando para a função `omie` do novo | depende do dono | a tarefa roda no computador do dono; trocar endereço e chave no dia |
-| B7 | Rastreio "seguiu junto" e "rastreio completo" | falta | não existem no novo |
+| B7 | Rastreio "seguiu junto" e "rastreio completo" | pronto | "seguiu junto" com a regra do antigo (frete zero, mesma emissão e unidade de NF entregue; empate pela NF de número vizinho); conferido com o antigo: mesmos 4 casos. "Rastreio completo": botão "Rastreio da Quality" na tela Pedidos (relatório do robô diário e do completo); 328 pedidos em 41 s, nenhuma data alterada |
 | B8 | Usuários: 21 do antigo | falta / depende do dono | D25 conferido: senhas em bcrypt `$2a$10$`, compatível; 18 logins (17 em `membros` + 1 fora), 4 membros sem login (criam senha), 2 já existem no novo. Falta: o dono definir o papel de cada um; copiar no dia; tela de gestão de usuários |
 | B9 | Avisos | pronto | D9: só na tela |
 | B10 | Cópia de segurança diária (D2) | depende do dono / falta | condição do dono para a troca; conferir que está rodando |
@@ -52,7 +52,7 @@ Legenda: **pronto** = feito e conferido no sistema novo · **falta** = trabalho 
 | # | Item | Estado | Observação |
 |---|---|---|---|
 | C1 | D13 — vale o DH do antigo; os só-do-novo acima do maior; número anterior guardado | pronto (simulado) | `troca_laboratorios`: 53 renumerados (46 CP + 7 Injemed → 0473–0479); 0 diferentes depois; próximo DH-2026-0480 |
-| C2 | Busca pelo número anterior na tela | falta | o número fica em `num_interno_anterior` e no histórico da ficha; a busca da lista de pedidos ainda não olha essa tabela |
+| C2 | Busca pelo número anterior na tela | pronto | a busca de Pedidos e de Pagamentos olha também o número anterior; a ficha mostra "Nº anterior" |
 | C3 | Apagar pedidos TST e ligar a numeração oficial | pronto (simulado) | na mesma função; hoje há 0 pedidos de teste |
 | C4 | Retrato antes/depois (pedidos, parcelas, pagamentos, NF, receitas) | pronto | `troca_retrato()`; simulação com tudo igual; `nucleo/conferencia/retrato-antes/depois-0017-2026-11-28.json` |
 | C5 | Reconciliação em 3 níveis (linhas, R$ por situação, hash) | pronto | refazer no dia, depois da sincronização |
